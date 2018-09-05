@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 
@@ -11,39 +10,59 @@ use std::marker::PhantomData;
 /// memory. 
 
 #[derive(Copy, Clone)]
-pub struct FnMod<I, S, A>(fn(&I, &mut S) -> A);
-
-impl<I, S, A> Deref for FnMod<I, S, A> {
-    type Target=fn(&I, &mut S) -> A;
-    fn deref(&self) -> &fn(&I, &mut S) -> A {
-        &self.0
-    }
-}
-
-#[derive(Copy, Clone)]
-pub struct InternalStateMachine<I, S, A> {
-    transition_fn: FnMod<I, S, A>, 
+pub struct InternalStateMachine<I, S, A, C> where 
+    C: Into<fn(&I, &mut S) -> A> + Clone 
+{
+    transition_fn: C, 
     internal: S,
+    _i_exists: PhantomData<I>,
+    _a_exists: PhantomData<A>
 }
 
-impl <I, S, A> InternalStateMachine<I, S, A> {
-    pub fn new(calling_fn: FnMod<I, S, A>, init_state: S) -> InternalStateMachine<I, S, A> {
+impl <I, S, A, C> InternalStateMachine<I, S, A, C> where 
+    C: Into<fn(&I, &mut S) -> A> + Clone
+{
+    pub fn new(calling_fn: C, init_state: S) -> InternalStateMachine<I, S, A, C> {
         InternalStateMachine {
             transition_fn: calling_fn,
             internal: init_state,
+            _i_exists: PhantomData,
+            _a_exists: PhantomData
         }
-    }
-
-    #[doc(hidden)]
-    fn step(&mut self, input: &I) -> A {
-        (self.transition_fn)(&input, &mut self.internal)
     }
 } 
 
-impl<I, S, A> Automaton<I, A> for InternalStateMachine<I, S, A> {
+impl<I, S, A, C> Automaton<I, A> for InternalStateMachine<I, S, A, C>  where 
+    C: Into<fn(&I, &mut S) -> A> + Clone
+{
     fn transition(&mut self, input: &I) -> A {
-        self.step(input)
+        (self.transition_fn.clone().into())(&input, &mut self.internal)
     }
 }
 
-impl<I, S, A> FiniteStateAutomaton<I, A> for InternalStateMachine<I, S, A> where S: Copy {}
+impl<I, S, A, C> FiniteStateAutomaton<I, A> for InternalStateMachine<I, S, A, C> where 
+    S: Copy,
+    C: Into<fn(&I, &mut S) -> A> + Copy 
+{}
+
+#[cfg(test)]
+mod tests {
+
+    fn increment_swap(increment: &i64, accumulator: &mut i64) -> i64 {
+        let orig_acc = *accumulator;
+        *accumulator += increment;
+        orig_acc
+    }
+
+    #[test]
+    fn check_def() {
+        use internal_state_machine::InternalStateMachine;
+        use automaton::Automaton;
+        let incr: fn(&i64, &mut i64) -> i64 = increment_swap;
+        let mut x = InternalStateMachine::new(incr, 0);
+        assert!(x.transition(&1) == 0);
+        assert!(x.transition(&2) == 1);
+        assert!(x.transition(&3) == 3);
+        assert!(x.transition(&6) == 6);
+    }
+}

@@ -3,4 +3,4 @@ name = "stackbt_jump_table"
 version = "0.1.0"
 authors = ["eaglgenes101 <eaglgenes101@gmail.com>"]
 
-[dev-dependencies]
+[dependencies]

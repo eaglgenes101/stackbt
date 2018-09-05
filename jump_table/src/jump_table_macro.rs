@@ -1,56 +1,10 @@
-macro_rules! jump_table_copy {
-    (
-        $name:ident {
-            $( $variant:ident ) ,*
-        }
-    ) => {
-        use std::marker::{Copy};
-
-        impl Copy for $name {}
-        impl Clone for $name {
-            fn clone(&self) -> Self {
-                *self
-            }
-        }
-    };
-}
-
-macro_rules! jump_table_eq {
-    (
-        $name:ident {
-            $( $variant:ident ) ,*
-        }
-    ) => {
-        use std::cmp::{PartialEq, Eq};
-
-        impl Eq for $name {}
-        impl PartialEq for $name {
-            fn eq(&self, other: &Self) -> bool {
-                match (self, other) {
-                    $( ( & $name::$variant, & $name::$variant ) => true, ) *
-                    _ => false
-                }
-            }
-        }
-    }
-}
-
 macro_rules! jump_table_display {
     (
         $name:ident {
             $( $variant:ident ) ,*
         }
     ) => {
-        use std::fmt::{Error, Formatter, Debug, Display};
-
-        impl Debug for $name {
-            fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-                let disp_str = match self {
-                    $( $variant => stringify!( $variant )), +
-                };
-                f.write_str(disp_str)
-            }
-        }
+        use std::fmt::{Error, Formatter, Display};
 
         impl Display for $name {
             fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
@@ -85,26 +39,15 @@ macro_rules! jump_table_from {
 macro_rules! jump_table {
     (
         $( #[ $mval:meta ] ) *
-        enum $name:ident : $fntype:ty {
+        enum $name:ident : fn ( $($argtype:ty),* ) -> $rettype:ty {
             $( $variant:ident = $value:expr ) , *
         }
     ) => {
         $( #[ $mval ] ) *
+        #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq)]
         enum $name {
             $( $variant ), *
         }
-
-        jump_table_copy!(
-            $name {
-                $( $variant ), *
-            }
-        );
-
-        jump_table_eq!(
-            $name {
-                $( $variant ), *
-            }
-        );
 
         jump_table_display!(
             $name {
@@ -113,7 +56,7 @@ macro_rules! jump_table {
         );
 
         jump_table_from!(
-            $name : $fntype {
+            $name : fn ( $($argtype),* ) -> $rettype {
                 $( $variant = $value ), *
             }
         );
