@@ -1,4 +1,4 @@
 pub mod automaton;
 pub mod ref_state_machine;
-pub mod own_state_machine;
-pub mod internal_automaton;
+pub mod internal_state_machine;
+pub mod pushdown_automaton;

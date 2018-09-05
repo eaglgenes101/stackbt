@@ -1,40 +1,12 @@
-use std::ops::FnMut;
-
-pub trait Automaton<'f, I, A> {
+/// The automaton trait is used to represent agents which, at a regular rate, 
+/// take input, process it, and return an action. Most of them also change 
+/// their internal state each transition. 
+pub trait Automaton<I, A> {
     #[must_use]
-    fn transition(&'f mut self, input: &I) -> A;
+    fn transition(&mut self, input: &I) -> A;
 }
 
-/// Automaton impl for types which implement FnMut(&I) -> A. This is not 
-/// recommended for uses other than shimming existing closures into 
-/// automata parameters, as this results in a highly opaque automaton. 
-impl<'f, I, A, C: FnMut(&I) -> A> Automaton<'f, I, A> for C {
-    fn transition(&'f mut self, input: &I) -> A {
-        self(&input)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use automaton::Automaton;
-
-    #[test]
-    fn fnmut_automaton_test() {
-        let mut i: i64 = 0;
-        let mut j: i64 = 1;
-        {
-            let mut w = |r: &i64| {
-                i = j;
-                j = *r;
-                i
-            };
-            let k = &mut w;
-            assert!(k.transition(&3) == 1);
-            assert!(k.transition(&2) == 3);
-            assert!(k.transition(&6) == 2);
-        }
-        assert!(i == 2);
-        assert!(j == 6);
-    }
-
-}
+/// Marker trait for Finite State Automata, which are a restricted class of 
+/// automata that are quite well behaved. In particular, they occupy fixed 
+/// memory, and thus do not need extra allocation to operate. 
+pub trait FiniteStateAutomaton<I, A>: Automaton<I, A> {}

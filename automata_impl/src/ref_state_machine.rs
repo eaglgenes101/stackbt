@@ -1,39 +1,47 @@
-use std::ops::Fn;
-use automaton::Automaton;
+use std::ops::Deref;
+use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
+use std::convert::Into;
 
-/// State machine implemented through 
+#[derive(Copy, Clone)]
+pub struct FnStep<T, A, C> where C: Into<fn(&T)->(A, FnStep<T, A, C>)> {
+    fn_ref: fn(&T)->(A, FnStep<T, A, C>),
+    _c_exists: PhantomData<C>
+}
 
 /// State machine implemented through a closure reference wrapper struct. 
 /// Each step, the currently referenced closure is called, returning an 
 /// action and a reference to the closure to call for the next step. 
-pub struct RefStateMachine<'f, I, A, C: Fn(&I) -> (A, &'f C) + 'f>
-{
-    current_state: &'f C,
-    _i_life_check: PhantomData<I>,
-    _a_life_check: PhantomData<A>,
+#[derive(Copy, Clone)]
+pub struct RefStateMachine<I, A, C> where C: Into<fn(&I)->(A, FnStep<I, A, C>)> {
+    current_state: FnStep<I, A, C>
 }
 
-impl <'f, I, A, C: Fn(&I) -> (A, &'f C)> RefStateMachine<'f, I, A, C>
+impl <I, A, C: Into<fn(&I)->(A, FnStep<I, A, C>)>> RefStateMachine<I, A, C>
 {
-    pub fn new(init_state: &'f C) -> RefStateMachine<I, A, C> {
+    pub fn new(init_state: FnStep<I, A, C>) -> RefStateMachine<I, A, C> {
         RefStateMachine {
-            current_state: init_state,
-            _i_life_check: PhantomData,
-            _a_life_check: PhantomData
+            current_state: init_state
         }
     }
 
-    fn step(&'f mut self, input: &I) -> A {
-        let (action, next_state) = (self.current_state)(input);
+    #[doc(hidden)]
+    fn step(&mut self, input: &I) -> A {
+        let (action, next_state) = (self.current_state.fn_ref)(input);
         self.current_state = next_state;
         action
     }
 }
 
-impl <'f, I, A, C: Fn(&I) -> (A, &'f C)> Automaton<'f, I, A> for RefStateMachine<'f, I, A, C> 
+impl <I, A, C> Automaton<I, A> for RefStateMachine<I, A, C> where
+    C: Into<fn(&I)->(A, FnStep<I, A, C>)>
 {
-    fn transition(&'f mut self, input: &I) -> A {
+    fn transition(&mut self, input: &I) -> A {
         self.step(input)
     }
 }
+
+impl <I, A, C> FiniteStateAutomaton<I, A> for RefStateMachine<I, A, C> where 
+    C: Into<fn(&I)->(A, FnStep<I, A, C>)>
+{}
+

@@ -1,4 +1,5 @@
 [workspace]
 members = [
-    "automata_impl"
+    "automata_impl",
+    "jump_table"
 ]
