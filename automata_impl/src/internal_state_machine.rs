@@ -3,26 +3,29 @@ use std::marker::PhantomData;
 
 /// State machine implemented through a function to call and an encapsulated 
 /// state. Each step, the referenced function is called with the input and 
-/// current state, returning an action and possible modifying the state. 
+/// current state, returning an action and possibly modifying the state. 
 /// 
 /// To enforce that the state is self-contained, the internal state must 
 /// be a Copy type, which is incompatible with references to non-static
 /// memory. 
 
 #[derive(Copy, Clone)]
-pub struct InternalStateMachine<I, S, A, C> where 
-    C: Into<fn(&I, &mut S) -> A> + Clone 
+pub struct InternalStateMachine<'k, I, S, A, C> where 
+    C: Into<fn(&I, &mut S) -> A> + Clone + 'k,
+    S: 'k,
+    I: 'k
 {
     transition_fn: C, 
     internal: S,
-    _i_exists: PhantomData<I>,
+    _i_exists: PhantomData<&'k I>,
     _a_exists: PhantomData<A>
 }
 
-impl <I, S, A, C> InternalStateMachine<I, S, A, C> where 
-    C: Into<fn(&I, &mut S) -> A> + Clone
+impl <'k, I, S, A, C> InternalStateMachine<'k, I, S, A, C> where 
+    C: Into<fn(&I, &mut S) -> A> + Clone + 'k,
+    S: 'k
 {
-    pub fn new(calling_fn: C, init_state: S) -> InternalStateMachine<I, S, A, C> {
+    pub fn new(calling_fn: C, init_state: S) -> InternalStateMachine<'k, I, S, A, C> {
         InternalStateMachine {
             transition_fn: calling_fn,
             internal: init_state,
@@ -32,17 +35,35 @@ impl <I, S, A, C> InternalStateMachine<I, S, A, C> where
     }
 } 
 
-impl<I, S, A, C> Automaton<I, A> for InternalStateMachine<I, S, A, C>  where 
-    C: Into<fn(&I, &mut S) -> A> + Clone
+impl<'k, I, S, A, C> Automaton<'k, I, A> for InternalStateMachine<'k, I, S, A, C>  where 
+    C: Into<fn(&I, &mut S) -> A> + Clone + 'k,
+    S: 'k
 {
     fn transition(&mut self, input: &I) -> A {
         (self.transition_fn.clone().into())(&input, &mut self.internal)
     }
+
+    fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&I) -> A + 't> where 'k: 't {
+        let transition_fn_part = &self.transition_fn;
+        let mut internal_part = &mut self.internal;
+        Box::new(move |input: &I| -> A {
+            (transition_fn_part.clone().into())(&input, &mut internal_part)
+        })
+    }
+
+    fn into_fnmut(self) -> Box<FnMut(&I) -> A + 'k> {
+        let transition_fn_part = self.transition_fn;
+        let mut internal_part = self.internal;
+        Box::new(move |input: &I| -> A {
+            (transition_fn_part.clone().into())(&input, &mut internal_part)
+        })
+    }
 }
 
-impl<I, S, A, C> FiniteStateAutomaton<I, A> for InternalStateMachine<I, S, A, C> where 
-    S: Copy,
-    C: Into<fn(&I, &mut S) -> A> + Copy 
+impl<'k, I, S, A, C> FiniteStateAutomaton<'k, I, A> for 
+    InternalStateMachine<'k, I, S, A, C> where 
+    S: Copy + 'k,
+    C: Into<fn(&I, &mut S) -> A> + Copy + 'k
 {}
 
 #[cfg(test)]
