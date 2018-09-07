@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "automata_impl",
-    "jump_table"
+    "jump_table",
+    "behavior_tree"
 ]

@@ -35,10 +35,13 @@ impl <'k, I, S, A, C> InternalStateMachine<'k, I, S, A, C> where
     }
 } 
 
-impl<'k, I, S, A, C> Automaton<'k, I, A> for InternalStateMachine<'k, I, S, A, C>  where 
+impl<'k, I, S, A, C> Automaton<'k> for InternalStateMachine<'k, I, S, A, C>  where 
     C: Into<fn(&I, &mut S) -> A> + Clone + 'k,
     S: 'k
 {
+    type Input = I;
+    type Action = A;
+    #[inline]
     fn transition(&mut self, input: &I) -> A {
         (self.transition_fn.clone().into())(&input, &mut self.internal)
     }
@@ -60,7 +63,7 @@ impl<'k, I, S, A, C> Automaton<'k, I, A> for InternalStateMachine<'k, I, S, A, C
     }
 }
 
-impl<'k, I, S, A, C> FiniteStateAutomaton<'k, I, A> for 
+impl<'k, I, S, A, C> FiniteStateAutomaton<'k> for 
     InternalStateMachine<'k, I, S, A, C> where 
     S: Copy + 'k,
     C: Into<fn(&I, &mut S) -> A> + Copy + 'k

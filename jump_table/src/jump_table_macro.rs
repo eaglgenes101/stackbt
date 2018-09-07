@@ -40,13 +40,13 @@ macro_rules! jump_table {
     (
         $( #[ $mval:meta ] ) *
         enum $name:ident : fn ( $($argtype:ty),* ) -> $rettype:ty {
-            $( $variant:ident = $value:expr ) , *
+            $( $variant:ident = $value:path ) , *
         }
     ) => {
         $( #[ $mval ] ) *
         #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq)]
         enum $name {
-            $( $variant ), *
+            $( $variant ) , *
         }
 
         jump_table_display!(

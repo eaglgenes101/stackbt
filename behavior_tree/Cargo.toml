@@ -1,0 +1,8 @@
+[package]
+name = "stackbt_behavior_tree"
+version = "0.1.0"
+authors = ["eaglgenes101 <eaglgenes101@gmail.com>"]
+
+[dependencies]
+stackbt_automata_impl = { path = "../automata_impl" }
+stackbt_jump_table = { path = "../jump_table" }

@@ -28,42 +28,44 @@ impl <'k, I, A, C> RefStateMachine<'k, I, A, C> where
     }
 }
 
-impl <'k, I, A, C> Automaton<'k, I, A> for RefStateMachine<'k, I, A, C> where
+#[inline]
+fn ref_state_transition<'k, I, C, A>(fn_ref: &mut Option<C>, input: &I) 
+    -> A where
+    C: Into<fn(&I) -> (A, C)> + 'k
+{
+    let mut out_fn = Option::None;
+    swap(fn_ref, &mut out_fn);
+    let (action, new_fn) = (out_fn.unwrap().into())(&input);
+    *fn_ref = Option::Some(new_fn);
+    action
+}
+
+impl <'k, I, A, C> Automaton<'k> for RefStateMachine<'k, I, A, C> where
     C: Into<fn(&I)->(A, C)> + 'k
 {
+    type Input = I;
+    type Action = A;
+    #[inline]
     fn transition(&mut self, input: &I) -> A {
-        let mut switch_fn = Option::None;
-        swap(&mut self.current_state, &mut switch_fn);
-        let (action, next_state) = (switch_fn.unwrap().into())(input);
-        self.current_state = Option::Some(next_state);
-        action
+        ref_state_transition(&mut self.current_state, &input)
     }
-    
     
     fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&I) -> A + 't> where 'k: 't {
         let mut state_fn_part = &mut self.current_state;
         Box::new(move |input: &I| -> A {
-            let mut out_fn = Option::None;
-            swap(state_fn_part, &mut out_fn);
-            let (action, new_fn) = (out_fn.unwrap().into())(&input);
-            swap(state_fn_part, &mut Option::Some(new_fn));
-            action
+            ref_state_transition(state_fn_part, &input)
         })
     }
 
     fn into_fnmut(self) -> Box<FnMut(&I) -> A + 'k> {
         let mut state_fn_part = self.current_state;
         Box::new(move |input: &I| -> A {
-            let mut out_fn = Option::None;
-            swap(&mut state_fn_part, &mut out_fn);
-            let (action, new_fn) = (out_fn.unwrap().into())(&input);
-            swap(&mut state_fn_part, &mut Option::Some(new_fn));
-            action
+            ref_state_transition(&mut state_fn_part, &input)
         })
     }
 }
 
-impl <'k, I, A, C> FiniteStateAutomaton<'k, I, A> for RefStateMachine<'k, I, A, C> where 
+impl <'k, I, A, C> FiniteStateAutomaton<'k> for RefStateMachine<'k, I, A, C> where 
     C: Into<fn(&I)->(A, C)> + 'k
 {}
 

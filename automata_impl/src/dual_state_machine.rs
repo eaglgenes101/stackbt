@@ -33,27 +33,35 @@ impl<'k, I, S, A, C> DualStateMachine<'k, I, S, A, C> where
     }
 }
 
-impl<'k, I, S, A, C> Automaton<'k, I, A> for DualStateMachine<'k, I, S, A, C>  where 
+#[inline]
+fn dual_state_transition<'k, I, S, C, A>(fn_r: &mut Option<C>, st_r: &mut S, in_r: &I) 
+    -> A where
     C: Into<fn(&I, &mut S) -> (A, C)> + 'k,
     S: 'k
-{    
+{
+    let mut out_fn = Option::None;
+    swap(fn_r, &mut out_fn);
+    let (action, new_fn) = (out_fn.unwrap().into())(&in_r, st_r);
+    *fn_r = Option::Some(new_fn);
+    action
+}
+
+impl<'k, I, S, A, C> Automaton<'k> for DualStateMachine<'k, I, S, A, C> where 
+    C: Into<fn(&I, &mut S) -> (A, C)> + 'k,
+    S: 'k
+{
+    type Input = I;
+    type Action = A;
+    #[inline]
     fn transition(&mut self, input: &I) -> A{
-        let mut out_fn = Option::None;
-        swap(&mut self.state_fn, &mut out_fn);
-        let (action, new_fn) = (out_fn.unwrap().into())(&input, &mut self.internal);
-        self.state_fn = Option::Some(new_fn);
-        action
+        dual_state_transition(&mut self.state_fn, &mut self.internal, &input)
     }
     
     fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&I) -> A + 't> where 'k: 't {
         let mut state_fn_part = &mut self.state_fn;
         let mut internal_part = &mut self.internal;
         Box::new(move |input: &I| -> A {
-            let mut out_fn = Option::None;
-            swap(state_fn_part, &mut out_fn);
-            let (action, new_fn) = (out_fn.unwrap().into())(&input, internal_part);
-            swap(state_fn_part, &mut Option::Some(new_fn));
-            action
+            dual_state_transition(state_fn_part, internal_part, &input)
         })
     }
 
@@ -61,16 +69,12 @@ impl<'k, I, S, A, C> Automaton<'k, I, A> for DualStateMachine<'k, I, S, A, C>  w
         let mut state_fn_part = self.state_fn;
         let mut internal_part = self.internal;
         Box::new(move |input: &I| -> A {
-            let mut out_fn = Option::None;
-            swap(&mut state_fn_part, &mut out_fn);
-            let (action, new_fn) = (out_fn.unwrap().into())(&input, &mut internal_part);
-            swap(&mut state_fn_part, &mut Option::Some(new_fn));
-            action
+            dual_state_transition(&mut state_fn_part, &mut internal_part, &input)
         })
     }
 }
 
-impl<'k, I, S, A, C> FiniteStateAutomaton<'k, I, A> for DualStateMachine<'k, I, S, A, C> where 
+impl<'k, I, S, A, C> FiniteStateAutomaton<'k> for DualStateMachine<'k, I, S, A, C> where 
     S: Copy + 'k,
     C: Into<fn(&I, &mut S) -> (A, C)> + Copy + 'k
 {}

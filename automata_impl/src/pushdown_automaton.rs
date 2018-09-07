@@ -18,8 +18,8 @@ pub enum TerminalTransition<A, N> {
 /// runtime costs. 
 pub struct PushdownAutomaton <'k, I, A, N, T> where 
     I: 'k,
-    N: FiniteStateAutomaton<'k, I, PushdownTransition<A, N>> + 'k,
-    T: FiniteStateAutomaton<'k, I, TerminalTransition<A, N>> + 'k
+    N: FiniteStateAutomaton<'k> + 'k,
+    T: FiniteStateAutomaton<'k> + 'k
 {
     bottom: T,
     stack: Vec<N>,
@@ -29,8 +29,8 @@ pub struct PushdownAutomaton <'k, I, A, N, T> where
 
 impl<'k, I, A, N, T> PushdownAutomaton<'k, I, A, N, T> where 
     I: 'k,
-    N: FiniteStateAutomaton<'k, I, PushdownTransition<A, N>> + 'k,
-    T: FiniteStateAutomaton<'k, I, TerminalTransition<A, N>> + 'k
+    N: FiniteStateAutomaton<'k> + 'k,
+    T: FiniteStateAutomaton<'k> + 'k
 {
     pub fn new<K, S>(terminal: T, prepush: K) -> PushdownAutomaton<'k, I, A, N, T> where 
         K: Iterator<Item = N>,
@@ -46,45 +46,48 @@ impl<'k, I, A, N, T> PushdownAutomaton<'k, I, A, N, T> where
     }
 }
 
+#[inline]
 fn stack_elm_transition<'k, I, A, N, T> (stack: &mut Vec<N>, bottom: &mut T, input: &I)
      -> A where 
     I: 'k,
-    N: FiniteStateAutomaton<'k, I, PushdownTransition<A, N>> + 'k,
-    T: FiniteStateAutomaton<'k, I, TerminalTransition<A, N>> + 'k
+    N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, N>> + 'k,
+    T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, N>> + 'k
 {
-
-            match stack.pop() {
-                Option::Some(mut val) => {
-                    match val.transition(input) {
-                        PushdownTransition::Push(act, new) => {
-                            stack.push(val);
-                            stack.push(new);
-                            act
-                        },
-                        PushdownTransition::Stay(act) => {
-                            stack.push(val);
-                            act
-                        },
-                        PushdownTransition::Pop(act) => act
-                    }
+    match stack.pop() {
+        Option::Some(mut val) => {
+            match val.transition(input) {
+                PushdownTransition::Push(act, new) => {
+                    stack.push(val);
+                    stack.push(new);
+                    act
                 },
-                Option::None => {
-                    match bottom.transition(input) {
-                        TerminalTransition::Push(act, new) => {
-                            stack.push(new);
-                            act
-                        },
-                        TerminalTransition::Stay(act) => act
-                    }
-                }
+                PushdownTransition::Stay(act) => {
+                    stack.push(val);
+                    act
+                },
+                PushdownTransition::Pop(act) => act
             }
+        },
+        Option::None => {
+            match bottom.transition(input) {
+                TerminalTransition::Push(act, new) => {
+                    stack.push(new);
+                    act
+                },
+                TerminalTransition::Stay(act) => act
+            }
+        }
+    }
 }
 
-impl<'k, I, A, N, T> Automaton<'k, I, A> for PushdownAutomaton<'k, I, A, N, T> where 
+impl<'k, I, A, N, T> Automaton<'k> for PushdownAutomaton<'k, I, A, N, T> where 
     I: 'k,
-    N: FiniteStateAutomaton<'k, I, PushdownTransition<A, N>> + 'k,
-    T: FiniteStateAutomaton<'k, I, TerminalTransition<A, N>> + 'k
+    N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, N>> + 'k,
+    T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, N>> + 'k
 {
+    type Input = I;
+    type Action = A;
+    #[inline]
     fn transition(&mut self, input: &I) -> A {
         stack_elm_transition(&mut self.stack, &mut self.bottom, &input)
     }
@@ -105,4 +108,6 @@ impl<'k, I, A, N, T> Automaton<'k, I, A> for PushdownAutomaton<'k, I, A, N, T> w
         })
     }
 }
+
+
 
