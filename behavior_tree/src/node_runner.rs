@@ -1,60 +1,56 @@
-use node_traits::{AutomatonNode, NodeResult, Statepoint};
+use node_traits::{BehaviorTreeNode, NodeResult, Statepoint};
 use stackbt_automata_impl::automaton::Automaton;
 use std::mem::swap;
+use std::marker::PhantomData;
 
-pub enum NodeRunnerState<I, T, N> where 
-    N: AutomatonNode<T, Input=I>,
-    T: 'static, 
-    I: 'static
+pub enum NodeRunnerState<'k, I, N> where 
+    N: BehaviorTreeNode<Input=I>,
+    I: 'k
 {
-    RunningNode(N),
+    RunningNode(N, PhantomData<&'k I>),
     Terminal(N::Terminal),
     Poisoned
 }
 
-pub struct NodeRunner<I, T, N> where 
-    N: AutomatonNode<T, Input=I> + 'static,
-    T: 'static,
-    I: 'static
+pub struct NodeRunner<'k, I, N> where 
+    N: BehaviorTreeNode<Input=I> + 'k,
+    I: 'k
 {
-    node: NodeRunnerState<I, T, N>
+    node: NodeRunnerState<'k, I, N>
 }
 
-impl<I, T, N> NodeRunner<I, T, N> where 
-    N: AutomatonNode<T, Input=I> + 'static,
-    T: 'static,
-    I: 'static
+impl<'k, I, N> NodeRunner<'k, I, N> where 
+    N: BehaviorTreeNode<Input=I> + 'k,
+    I: 'k
 {
-    pub fn new() -> NodeRunner<I, T, N> {
+    pub fn new() -> NodeRunner<'k, I, N> {
         NodeRunner {
-            node: NodeRunnerState::RunningNode(N::default())
+            node: NodeRunnerState::RunningNode(N::default(), PhantomData)
         }
     }
 }
 
-impl<I, T, N> Default for NodeRunner<I, T, N> where 
-    N: AutomatonNode<T, Input=I> + 'static,
-    T: 'static,
-    I: 'static
+impl<'k, I, N> Default for NodeRunner<'k, I, N> where 
+    N: BehaviorTreeNode<Input=I> + 'k,
+    I: 'k
 {
-    fn default() -> NodeRunner<I, T, N> {
+    fn default() -> NodeRunner<'k, I, N> {
         NodeRunner::new()
     }
 }
 
-fn node_runner_transition<I, T, N>(node: &mut NodeRunnerState<I, T, N>, input: &I) 
-    -> Statepoint<N, T> where 
-    N: AutomatonNode<T, Input=I> + 'static,
-    T: 'static,
-    I: 'static
+fn node_runner_transition<'k, I, N>(node: &mut NodeRunnerState<I, N>, input: &I) 
+    -> Statepoint<N> where 
+    N: BehaviorTreeNode<Input=I> + 'k,
+    I: 'k
 {
     let mut result = NodeRunnerState::Poisoned;
     swap(node, &mut result);
     match result {
-        NodeRunnerState::RunningNode(n) => {
+        NodeRunnerState::RunningNode(n, _) => {
             match n.step(input) {
                 NodeResult::Nonterminal(s, a) => {
-                    *node = NodeRunnerState::RunningNode(a);
+                    *node = NodeRunnerState::RunningNode(a, PhantomData);
                     Statepoint::Nonterminal(s)
                 },
                 NodeResult::Terminal(t) => {
@@ -63,24 +59,26 @@ fn node_runner_transition<I, T, N>(node: &mut NodeRunnerState<I, T, N>, input: &
                 }
             }
         },
-        NodeRunnerState::Terminal(t) => Statepoint::Terminal(t),
+        NodeRunnerState::Terminal(t) => {
+            *node = NodeRunnerState::Terminal(t.clone());
+            Statepoint::Terminal(t)
+        },
         _ => panic!("Node runner was poisoned!")
     }
 }
 
-impl<I, T, N> Automaton<'static> for NodeRunner<I, T, N> where 
-    N: AutomatonNode<T, Input=I> + 'static,
-    T: 'static,
-    I: 'static
+impl<'k, I, N> Automaton<'k> for NodeRunner<'k, I, N> where 
+    N: BehaviorTreeNode< Input=I> + 'k,
+    I: 'k
 {
     type Input = I;
-    type Action = Statepoint<N, T>;
-    fn transition(&mut self, input: &I) -> Statepoint<N, T> {
+    type Action = Statepoint<N>;
+    fn transition(&mut self, input: &I) -> Statepoint<N> {
         node_runner_transition(&mut self.node, input)
     }
 
     fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&Self::Input) -> Self::Action + 't> where 
-        'static: 't 
+        'k: 't 
     {
         let node_part = &mut self.node;
         Box::new(move |input: &I| {
@@ -88,7 +86,7 @@ impl<I, T, N> Automaton<'static> for NodeRunner<I, T, N> where
         })
     }
 
-    fn into_fnmut(self) -> Box<FnMut(&Self::Input) -> Self::Action + 'static> {
+    fn into_fnmut(self) -> Box<FnMut(&Self::Input) -> Self::Action + 'k> {
         let mut node_part = self.node;
         Box::new(move |input: &I| {
             node_runner_transition(&mut node_part, input)

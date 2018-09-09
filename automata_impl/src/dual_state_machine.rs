@@ -2,12 +2,11 @@ use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 use std::mem::swap;
 
-/// State machine which combines the changing functions of ref_state_machine 
-/// with the internal state of internal_state_machine. This is the most 
-/// general state machine form in this framework, but the other two are 
-/// usually easier to work with. 
-
-#[derive(Clone)]
+/// State machine implementation which combines the changing functions of 
+/// ref_state_machine with the internal mutable state of 
+/// internal_state_machine. This is the most general state machine form in 
+/// this crate, but the other two are generally easier to work with. 
+#[derive(Copy, Clone)]
 pub struct DualStateMachine<'k, I, S, A, C> where 
     C: Into<fn(&I, &mut S) -> (A, C)> + 'k,
     S: 'k,

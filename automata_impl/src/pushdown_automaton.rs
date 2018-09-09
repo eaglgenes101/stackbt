@@ -1,12 +1,19 @@
 use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 
+/// Nonterminal pushdown transition. Push pushes a new state machine onto the 
+/// pushdown stack, Stay keeps the state machine as it is, and Pop removes the 
+/// uppermost state machine from the stack. State machines may change state in 
+/// addition to manipulating the stack. 
 pub enum PushdownTransition<A, N> {
     Push(A, N),
     Stay(A),
     Pop(A)
 }
 
+/// Terminal pushdown transition. Push pushes a new state machine onto the 
+/// pushdown stack, whilt Stay keeps the state machine as it is. State 
+/// machines may change state in addition to manipulating the stack. 
 pub enum TerminalTransition<A, N> {
     Push(A, N),
     Stay(A)
@@ -35,6 +42,18 @@ impl<'k, I, A, N, T> PushdownAutomaton<'k, I, A, N, T> where
     pub fn new<K, S>(terminal: T, prepush: K) -> PushdownAutomaton<'k, I, A, N, T> where 
         K: Iterator<Item = N>,
         S: IntoIterator<Item = N, IntoIter = K>
+    {
+        let to_use_vec = prepush.collect();
+        PushdownAutomaton {
+            bottom: terminal,
+            stack: to_use_vec,
+            _i_exists: PhantomData,
+            _a_exists: PhantomData
+        }
+    }
+
+    pub fn from_iter<K>(terminal: T, prepush: K) -> PushdownAutomaton<'k, I, A, N, T> where 
+        K: Iterator<Item = N>
     {
         let to_use_vec = prepush.collect();
         PushdownAutomaton {

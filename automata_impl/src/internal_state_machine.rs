@@ -1,14 +1,14 @@
 use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 
-/// State machine implemented through a function to call and an encapsulated 
-/// state. Each step, the referenced function is called with the input and 
-/// current state, returning an action and possibly modifying the state. 
+/// State machine implementation through a single, immutable function pointer 
+/// called on an encapsualted state. Each step, the referenced function is 
+/// called with the input and current state, returning an action and possibly 
+/// modifying the state. 
 /// 
 /// To enforce that the state is self-contained, the internal state must 
-/// be a Copy type, which is incompatible with references to non-static
+/// be a Copy type, which is incompatible with safe references to non-static 
 /// memory. 
-
 #[derive(Copy, Clone)]
 pub struct InternalStateMachine<'k, I, S, A, C> where 
     C: Into<fn(&I, &mut S) -> A> + Clone + 'k,

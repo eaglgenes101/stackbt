@@ -16,21 +16,20 @@
 
 /// An generic enum which each composable state machine exposes for its 
 /// statepoints
-pub enum Statepoint<S, T> where S: AutomatonNode<T>
-{
+pub enum Statepoint<S: BehaviorTreeNode> {
     Nonterminal(S::Nonterminal),
     Terminal(S::Terminal),
 }
 
-pub enum NodeResult<S, T> where S: AutomatonNode<T> 
-{
+pub enum NodeResult<S: BehaviorTreeNode> {
     Nonterminal(S::Nonterminal, S),
     Terminal(S::Terminal)
 }
 
-pub trait AutomatonNode<T>: Default {
+pub trait BehaviorTreeNode: Default {
     type Input;
-    type Nonterminal: Into<T>;
-    type Terminal: Into<T> + Clone;
-    fn step(self, input: &Self::Input) -> NodeResult<Self, T>;
+    type Output;
+    type Nonterminal: Into<Self::Output>;
+    type Terminal: Into<Self::Output> + Clone;
+    fn step(self, input: &Self::Input) -> NodeResult<Self>;
 }
