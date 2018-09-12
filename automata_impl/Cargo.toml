@@ -3,4 +3,5 @@ name = "stackbt_automata_impl"
 version = "0.1.0"
 authors = ["eaglgenes101 <eaglgenes101@gmail.com>"]
 
-[dependencies]
+[dev-dependencies]
+stackbt_jump_table = { path = "../jump_table" }

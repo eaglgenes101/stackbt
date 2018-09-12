@@ -14,22 +14,28 @@
 /// transition their children, or to return to its own parent, which causes 
 /// all children to be abandoned. 
 
-/// An generic enum which each composable state machine exposes for its 
+/// A generic enum which each composable state machine exposes for its 
 /// statepoints
-pub enum Statepoint<S: BehaviorTreeNode> {
-    Nonterminal(S::Nonterminal),
-    Terminal(S::Terminal),
+pub enum Statepoint<N, T> {
+    Nonterminal(N),
+    Terminal(T),
 }
 
-pub enum NodeResult<S: BehaviorTreeNode> {
-    Nonterminal(S::Nonterminal, S),
-    Terminal(S::Terminal)
+/// An implementation detail of composable state machines. To prevent 
+/// use after reaching a terminal state, the step function takes itself by 
+/// move. If a terminal state is reached, the machine is consumed, never to 
+/// return, and only the terminal state returns, otherwise it is returned 
+/// along with the nonterminal state. 
+pub enum NodeResult<N, T, M> {
+    Nonterminal(N, M),
+    Terminal(T)
 }
 
 pub trait BehaviorTreeNode: Default {
     type Input;
-    type Output;
-    type Nonterminal: Into<Self::Output>;
-    type Terminal: Into<Self::Output> + Clone;
-    fn step(self, input: &Self::Input) -> NodeResult<Self>;
+    type Nonterminal;
+    type Terminal;
+    fn step(self, input: &Self::Input) -> NodeResult<Self::Nonterminal, Self::Terminal, Self>;
 }
+
+

@@ -8,7 +8,6 @@ pub trait Automaton<'k> {
     type Input: 'k;
     type Action;
 
-    #[must_use]
     fn transition(&mut self, input: &Self::Input) -> Self::Action;
     fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&Self::Input) -> Self::Action + 't> where 
         'k: 't;

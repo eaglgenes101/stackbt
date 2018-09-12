@@ -23,7 +23,8 @@ pub struct InternalStateMachine<'k, I, S, A, C> where
 
 impl <'k, I, S, A, C> InternalStateMachine<'k, I, S, A, C> where 
     C: Into<fn(&I, &mut S) -> A> + Clone + 'k,
-    S: 'k
+    S: 'k,
+    I: 'k
 {
     pub fn new(calling_fn: C, init_state: S) -> InternalStateMachine<'k, I, S, A, C> {
         InternalStateMachine {
@@ -35,9 +36,10 @@ impl <'k, I, S, A, C> InternalStateMachine<'k, I, S, A, C> where
     }
 } 
 
-impl<'k, I, S, A, C> Automaton<'k> for InternalStateMachine<'k, I, S, A, C>  where 
+impl<'k, I, S, A, C> Automaton<'k> for InternalStateMachine<'k, I, S, A, C> where 
     C: Into<fn(&I, &mut S) -> A> + Clone + 'k,
-    S: 'k
+    S: 'k,
+    I: 'k
 {
     type Input = I;
     type Action = A;
@@ -63,10 +65,10 @@ impl<'k, I, S, A, C> Automaton<'k> for InternalStateMachine<'k, I, S, A, C>  whe
     }
 }
 
-impl<'k, I, S, A, C> FiniteStateAutomaton<'k> for 
-    InternalStateMachine<'k, I, S, A, C> where 
+impl<'k, I, S, A, C> FiniteStateAutomaton<'k> for InternalStateMachine<'k, I, S, A, C> where 
+    C: Into<fn(&I, &mut S) -> A> + Copy + 'k,
     S: Copy + 'k,
-    C: Into<fn(&I, &mut S) -> A> + Copy + 'k
+    I: 'k
 {}
 
 #[cfg(test)]

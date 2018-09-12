@@ -1,3 +1,5 @@
+#[doc(hidden)]
+#[macro_export]
 macro_rules! enum_variant_define {
     (
         ( $( $vis:tt )* ) $oldname:ident {
@@ -14,40 +16,24 @@ macro_rules! enum_variant_define {
                 fn from(this: $oldname ) -> $variant {
                     match this {
                         $( $oldname :: $oldvariant => $variant :: $oldvariant , )*
-                        _ => unreachable!("Your macro has failed you!")
+                        _ => unreachable!("Attempted conversion outside domain")
                     }
                 }
             }
 
-            impl Display for $variant {
-                fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-                    let disp_str = match self {
-                        $( $variant :: $oldvariant => stringify!( $oldvariant ) ),*
-                    };
-                    f.write_str(disp_str)
+            impl From < $variant > for $oldname {
+                fn from(this: $variant ) -> $oldname {
+                    match this {
+                        $( $variant :: $oldvariant => $oldname :: $oldvariant ),*
+                    }
                 }
             }
         )*
     }
 }
 
-macro_rules! enum_divide_display {
-    (
-        $name:ident {
-            $( $variant:ident ),*
-        }
-    ) => {
-        impl Display for $name {
-            fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-                let disp_str = match self {
-                    $( $name :: $variant (_) => stringify!( $variant ) ),*
-                };
-                f.write_str(disp_str)
-            }
-        }
-    };
-}
-
+#[doc(hidden)]
+#[macro_export]
 macro_rules! enum_divide_from {
     (
         $name:ident : $oldname:ident {
@@ -65,9 +51,19 @@ macro_rules! enum_divide_from {
                 }
             }
         }
+
+        impl From< $name > for $oldname {
+            fn from( this: $name ) -> $oldname {
+                match this {
+                    $( $name :: $variant (n) => n.into() ),*
+                }
+            }
+        }
     }
 }
 
+#[doc(hidden)]
+#[macro_export]
 macro_rules! enum_divide_main {
     (
         $( #[ $mval:meta ] )*
@@ -78,8 +74,6 @@ macro_rules! enum_divide_main {
             ),*
         }
     ) => {
-        use std::fmt::{Error, Formatter, Display};
-        use std::convert::From;
 
         $( #[ $mval ] )*
         #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq)]
@@ -93,12 +87,6 @@ macro_rules! enum_divide_main {
         enum_variant_define!(
             ( $( $vis )* ) $oldname {
                 $( $( $oldvariant )|* => $variant ),*
-            }
-        );
-
-        enum_divide_display!(
-            $name {
-                $( $variant ),*
             }
         );
 

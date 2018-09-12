@@ -1,8 +1,11 @@
 
 extern crate stackbt_automata_impl;
-extern crate stackbt_jump_table;
 
-pub mod node_traits;
+pub mod base_nodes;
+pub mod behavior_tree_node;
 pub mod node_runner;
-pub mod leaf_node;
-pub mod serial_branch_node;
+pub mod homogeneous_serial_node;
+pub mod heterogeneous_serial_node;
+pub mod homogeneous_parallel_node;
+pub mod heterogeneous_parallel_node;
+pub mod node_wrappers;

@@ -1,30 +1,11 @@
-macro_rules! jump_table_display {
-    (
-        $name:ident {
-            $( $variant:ident ),*
-        }
-    ) => {
-        use std::fmt::{Error, Formatter, Display};
-
-        impl Display for $name {
-            fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-                let disp_str = match self {
-                    $( $variant => stringify!( $variant ) ),*
-                };
-                f.write_str(disp_str)
-            }
-        }
-    };
-}
-
+#[doc(hidden)]
+#[macro_export]
 macro_rules! jump_table_from {
     (
         $name:ident : $fntype:ty {
             $( $variant:ident = $value:expr ),*
         }
     ) => {
-        use std::convert::From;
-        use $crate::jump_table_traits::JumpTable;
 
         impl From< $name > for $fntype {
             fn from( val: $name ) -> Self {
@@ -38,6 +19,8 @@ macro_rules! jump_table_from {
     };
 }
 
+#[doc(hidden)]
+#[macro_export]
 macro_rules! jump_table_main {
     (
         $( #[ $mval:meta ] ) *
@@ -56,12 +39,6 @@ macro_rules! jump_table_main {
                 $variant 
             ),*
         }
-
-        jump_table_display!(
-            $name {
-                $( $variant ),*
-            }
-        );
 
         jump_table_from!(
             $name : $fntype {
@@ -170,6 +147,8 @@ mod tests {
     fn three() -> &'static str {
         "three"
     }
+
+    use jump_table_traits::JumpTable;
 
     jump_table!(
         enum Thing: fn() -> &'static str {

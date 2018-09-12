@@ -1,6 +1,8 @@
-macro_rules! fn_singleton_main {
+#[doc(hidden)]
+#[macro_export]
+macro_rules! fn_proxy_main {
     (
-        $enumname:ident;
+        $name:ident;
         $( #[ $mval:meta ] )*
         $( $vis:ident )* $( ( $( $where:tt )* ) )* ; $fnname:ident ( 
             $( $argname:ident : $argtype:ty ),* 
@@ -11,40 +13,30 @@ macro_rules! fn_singleton_main {
         -> $rettype $body
 
         #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-        $( $vis )* $( ( $( $where )* ) )* enum $enumname {
-            $enumname
-        }
+        $( $vis )* $( ( $( $where )* ) )* struct $name ;
 
-        impl Default for $enumname {
-            fn default() -> $enumname {
-                $enumname :: $enumname
+        impl Default for $name {
+            fn default() -> $name {
+                $name
             }
         }
 
-        use std::fmt::{Error, Formatter, Display};
-
-        impl Display for $enumname {
-            fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-                f.write_str( stringify!( $enumname ) )
-            }
-        }
-
-        impl From < $enumname > for fn ( $( $argtype ),* ) -> $rettype {
-            fn from ( _this : $enumname ) -> fn ( $( $argtype ),* ) 
+        impl From < $name > for fn ( $( $argtype ),* ) -> $rettype {
+            fn from ( _this : $name ) -> fn ( $( $argtype ),* ) 
             -> $rettype { $fnname }
         }
     };
 }
 
 #[macro_export]
-macro_rules! fn_singleton {
+macro_rules! fn_proxy {
     (
         $( #[ $mval:meta ] )* 
-        $enumname:ident =
+        $name:ident =
         fn $fn:ident( $($arg:ident : $ty:ty),* ) $block:block
     ) => {
-    	fn_singleton_main!(
-            $enumname ;
+    	fn_proxy_main!(
+            $name ;
     		$( #[$mval] )*
     		; $fn ( $($arg : $ty),* ) -> ()
     		$block
@@ -53,11 +45,11 @@ macro_rules! fn_singleton {
 
     (
         $( #[ $mval:meta ] )* 
-        pub $enumname:ident =
+        pub $name:ident =
         fn $fn:ident( $($arg:ident : $ty:ty),* ) $block:block
     ) => {
-    	fn_singleton_main!(
-            $enumname ;
+    	fn_proxy_main!(
+            $name ;
     	    $( #[ $mval ] )*
     		pub ; $fn ( $($arg : $ty),* ) -> ()
     		$block
@@ -66,11 +58,11 @@ macro_rules! fn_singleton {
 
     (
         $( #[ $mval:meta ] )* 
-        pub ( $( place:tt )* ) $enumname:ident =
+        pub ( $( place:tt )* ) $name:ident =
         fn $fn:ident( $($arg:ident : $ty:ty),* ) $block:block
     ) => {
-    	fn_singleton_main!(
-            $enumname ;
+    	fn_proxy_main!(
+            $name ;
     		$( #[ $mval ] )*
     		pub ( $( place:tt )* ) ; $fn ( $($arg : $ty),* ) -> ()
     		$block
@@ -79,11 +71,11 @@ macro_rules! fn_singleton {
 
     (
         $( #[ $mval:meta ] )* 
-        $enumname:ident =
+        $name:ident =
         fn $fn:ident( $($arg:ident : $ty:ty),* ) -> $ret:ty $block:block
     ) => {
-    	fn_singleton_main!(
-            $enumname ;
+    	fn_proxy_main!(
+            $name ;
     		$( #[ $mval ] )*
     		; $fn ( $($arg : $ty),* ) -> $ret
     		$block
@@ -92,11 +84,11 @@ macro_rules! fn_singleton {
 
     (
         $( #[ $mval:meta ] )* 
-        pub $enumname:ident =
+        pub $name:ident =
         fn $fn:ident( $($arg:ident : $ty:ty),* ) -> $ret:ty $block:block
     ) => {
-    	fn_singleton_main!(
-            $enumname ;
+    	fn_proxy_main!(
+            $name ;
     		$( #[ $mval ] )*
     		pub ; $fn ( $($arg : $ty),* ) -> $ret
     		$block
@@ -105,11 +97,11 @@ macro_rules! fn_singleton {
 
     (
         $( #[ $mval:meta ] )* 
-        pub ( $( place:tt )* ) $enumname:ident =
+        pub ( $( place:tt )* ) $name:ident =
         fn $fn:ident( $($arg:ident : $ty:ty),* ) -> $ret:ty $block:block
     ) => {
-    	fn_singleton_main!(
-            $enumname ;
+    	fn_proxy_main!(
+            $name ;
     		$( #[ $mval ] )*
     		pub ( $( place:tt )* ) ; $fn ( $($arg : $ty),* ) -> $ret
     		$block
@@ -118,7 +110,8 @@ macro_rules! fn_singleton {
 }
 
 mod tests {
-    fn_singleton!(
+
+    fn_proxy!(
         Foo = fn foo(a: i64, b: i64) -> i64 {
             a + b
         }
