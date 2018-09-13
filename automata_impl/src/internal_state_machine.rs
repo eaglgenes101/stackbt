@@ -1,6 +1,13 @@
 use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 
+pub trait InternalTransition: Copy {
+    type Internal;
+    type Input;
+    type Action;
+    fn step(&Self::Input, &mut Self::Internal) -> Self::Action;
+}
+
 /// State machine implementation through a single, immutable function pointer 
 /// called on an encapsualted state. Each step, the referenced function is 
 /// called with the input and current state, returning an action and possibly 
@@ -10,82 +17,88 @@ use std::marker::PhantomData;
 /// be a Copy type, which is incompatible with safe references to non-static 
 /// memory. 
 #[derive(Copy, Clone)]
-pub struct InternalStateMachine<'k, I, S, A, C> where 
-    C: Into<fn(&I, &mut S) -> A> + Clone + 'k,
-    S: 'k,
-    I: 'k
+pub struct InternalStateMachine<'k, C> where 
+    C: InternalTransition + 'k
 {
-    transition_fn: C, 
-    internal: S,
-    _i_exists: PhantomData<&'k I>,
-    _a_exists: PhantomData<A>
+    internal: C::Internal,
+    _lifetime_check: PhantomData<&'k C>
 }
 
-impl <'k, I, S, A, C> InternalStateMachine<'k, I, S, A, C> where 
-    C: Into<fn(&I, &mut S) -> A> + Clone + 'k,
-    S: 'k,
-    I: 'k
+impl<'k, C> InternalStateMachine<'k, C> where 
+    C: InternalTransition + 'k
 {
-    pub fn new(calling_fn: C, init_state: S) -> InternalStateMachine<'k, I, S, A, C> {
+    pub fn new(init_state: C::Internal) -> InternalStateMachine<'k, C> {
         InternalStateMachine {
-            transition_fn: calling_fn,
             internal: init_state,
-            _i_exists: PhantomData,
-            _a_exists: PhantomData
+            _lifetime_check: PhantomData
+        }
+    }
+
+    /// Constructor where the first argument is an instance of the type used 
+    /// for the state machine, to assist type inference
+    pub fn with(_calling_fn: C, init_state: C::Internal) -> InternalStateMachine<'k, C> {
+        InternalStateMachine {
+            internal: init_state,
+            _lifetime_check: PhantomData
         }
     }
 } 
 
-impl<'k, I, S, A, C> Automaton<'k> for InternalStateMachine<'k, I, S, A, C> where 
-    C: Into<fn(&I, &mut S) -> A> + Clone + 'k,
-    S: 'k,
-    I: 'k
+impl<'k, C> Automaton<'k> for InternalStateMachine<'k, C> where 
+    C: InternalTransition + 'k
 {
-    type Input = I;
-    type Action = A;
+    type Input = C::Input;
+    type Action = C::Action;
     #[inline]
-    fn transition(&mut self, input: &I) -> A {
-        (self.transition_fn.clone().into())(&input, &mut self.internal)
+    fn transition(&mut self, input: &C::Input) -> C::Action {
+        C::step(&input, &mut self.internal)
     }
 
-    fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&I) -> A + 't> where 'k: 't {
-        let transition_fn_part = &self.transition_fn;
+    fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&C::Input) -> C::Action + 't> where 
+        'k: 't 
+    {
         let mut internal_part = &mut self.internal;
-        Box::new(move |input: &I| -> A {
-            (transition_fn_part.clone().into())(&input, &mut internal_part)
+        Box::new(move |input: &C::Input| -> C::Action {
+            C::step(&input, &mut internal_part)
         })
     }
 
-    fn into_fnmut(self) -> Box<FnMut(&I) -> A + 'k> {
-        let transition_fn_part = self.transition_fn;
+    fn into_fnmut(self) -> Box<FnMut(&C::Input) -> C::Action + 'k> {
         let mut internal_part = self.internal;
-        Box::new(move |input: &I| -> A {
-            (transition_fn_part.clone().into())(&input, &mut internal_part)
+        Box::new(move |input: &C::Input| -> C::Action {
+            C::step(&input, &mut internal_part)
         })
     }
 }
 
-impl<'k, I, S, A, C> FiniteStateAutomaton<'k> for InternalStateMachine<'k, I, S, A, C> where 
-    C: Into<fn(&I, &mut S) -> A> + Copy + 'k,
-    S: Copy + 'k,
-    I: 'k
+impl<'k, C> FiniteStateAutomaton<'k> for InternalStateMachine<'k, C> where 
+    C: InternalTransition
 {}
 
 #[cfg(test)]
 mod tests {
+    use internal_state_machine::InternalTransition;
 
-    fn increment_swap(increment: &i64, accumulator: &mut i64) -> i64 {
-        let orig_acc = *accumulator;
-        *accumulator += increment;
-        orig_acc
+    #[derive(Copy, Clone)]
+    struct ThingMachine;
+
+    impl InternalTransition for ThingMachine {
+        type Internal = i64;
+        type Input = i64;
+        type Action = i64;
+
+        fn step(increment: &i64, accumulator: &mut i64) -> i64 {
+            let orig_acc = *accumulator;
+            *accumulator += increment;
+            orig_acc
+        }
     }
 
     #[test]
     fn check_def() {
         use internal_state_machine::InternalStateMachine;
         use automaton::Automaton;
-        let incr: fn(&i64, &mut i64) -> i64 = increment_swap;
-        let mut x = InternalStateMachine::new(incr, 0);
+        let mut x = InternalStateMachine::<ThingMachine>::new(0);
         assert!(x.transition(&1) == 0);
         assert!(x.transition(&2) == 1);
         assert!(x.transition(&3) == 3);

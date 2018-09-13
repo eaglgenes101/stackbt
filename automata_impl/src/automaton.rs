@@ -28,3 +28,41 @@ pub trait Automaton<'k> {
 /// automata that are quite well behaved. In particular, they occupy fixed 
 /// memory, and thus do not need extra allocation to operate. 
 pub trait FiniteStateAutomaton<'k>: Automaton<'k> {}
+
+#[cfg(test)]
+mod tests {
+    use internal_state_machine::InternalTransition;
+
+    #[derive(Copy, Clone)]
+    struct ThingMachine;
+
+    impl InternalTransition for ThingMachine {
+        type Internal = i64;
+        type Input = i64;
+        type Action = i64;
+
+        fn step(increment: &i64, accumulator: &mut i64) -> i64 {
+            let orig_acc = *accumulator;
+            *accumulator += increment;
+            orig_acc
+        }
+    }
+
+    #[test]
+    fn into_scan_iter_test() {
+        use automaton::Automaton;
+        use internal_state_machine::InternalStateMachine;
+        let zero_inf = 0..8;
+        let machine = InternalStateMachine::with(ThingMachine, 0);
+        let mut scanner = Automaton::into_scan_iter(machine, zero_inf);
+        assert!(scanner.next().unwrap() == 0);
+        assert!(scanner.next().unwrap() == 0);
+        assert!(scanner.next().unwrap() == 1);
+        assert!(scanner.next().unwrap() == 3);
+        assert!(scanner.next().unwrap() == 6);
+        assert!(scanner.next().unwrap() == 10);
+        assert!(scanner.next().unwrap() == 15);
+        assert!(scanner.next().unwrap() == 21);
+        assert!(scanner.next().is_none());
+    }
+}

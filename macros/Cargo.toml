@@ -1,4 +1,4 @@
 [package]
-name = "stackbt_automata_impl"
+name = "stackbt_macros"
 version = "0.1.0"
 authors = ["eaglgenes101 <eaglgenes101@gmail.com>"]

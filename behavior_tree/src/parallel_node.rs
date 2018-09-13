@@ -3,32 +3,25 @@ use std::marker::PhantomData;
 use std::iter::Iterator;
 
 /// A collection of nodes, all of which have the same input, nonterminal, 
-/// and terminal types. Implementors of this trait are expected to choose 
-/// some fixed tuple of node constructions such that for each valid index n of 
-/// the collection, get_for(n) yields a node that is constructed in the same 
-/// manner, and every iterator derived from into_iter() gives a similarly 
-/// constructed node at index n of iteration. 
-/// 
-/// In addition, if an iterator was derived from a collection, feeding it back 
-/// into from_iter() will result in the same collection of nodes as before, 
-/// and replacing individual nodes with corresponding nodes constructed by 
-/// get_for() will result in these replacements occuring in place of their 
-/// originals in iteration, and all unreplaced nodes being yielded by the 
-/// iterator just as if the nodes were never replaced. 
+/// and terminal types. The collection is associated with a particular 
+/// enumeration, each of whose elements is associated with a fixed 
+/// construction procedure. 
 pub trait NodeCollection<N>: Default where
     N: BehaviorTreeNode + ?Sized
 {
+    type Enumeration: 'static + Default + Copy + IntoIterator<Item=Self::Enumeration>;
+
     /// The iterator type returned by into_iter. This associated type is 
     /// needed so that associated type sizes can be statically determined 
     /// by the compiler to avoid runtime allocation and indirection. 
-    type Iter: Iterator<Item=N>;
+    type Iter: ExactSizeIterator<Item=N>;
 
     /// Construct a fresh new collection of newly initialized nodes. 
     fn new() -> Self;
 
     /// Construct and return a node with the same specific type as would be 
     /// constructed for that ordinal node. 
-    fn get_for(usize) -> Option<N>;
+    fn get_for(Self::Enumeration) -> N;
 
     /// Consume the node iterator and construct a new collection of nodes 
     /// given these existing nodes. 
@@ -39,67 +32,64 @@ pub trait NodeCollection<N>: Default where
     fn into_iter(self) -> Self::Iter;
 }
 
-pub enum Decision<N, I, X> where 
-    I: Fn(&N) -> bool
-{
-    Stay(I, PhantomData<N>),
+pub enum ParallelDecision<E, N, X> {
+    Stay(Box<Fn(E, &N) -> bool>),
     Exit(X)
 }
 
-pub trait ParallelDecider<N, X> where
-    N: BehaviorTreeNode + ?Sized + 'static
+pub trait ParallelDecider<E, N, T, X> where 
+    N: 'static,
+    T: 'static
 {
-    type GenClosure: Fn(&N::Nonterminal) -> bool;
-
-    fn each_step<'k, I>(I) -> Decision<N::Nonterminal, Self::GenClosure, X> where
-        I: Iterator<Item=&'k Statepoint<N::Nonterminal, N::Terminal>> + 'k;
+    fn each_step<'k, K>(K) -> ParallelDecision<E, N, X> where
+        K: Iterator<Item=&'k Statepoint<N, T>> + 'k;
 }
 
-pub struct HomogeneousParallelNode<C, N, D, X> where
+pub struct ParallelBranchNode<C, N, D, X> where
     N: BehaviorTreeNode + ?Sized + 'static,
     C: NodeCollection<N>,
-    D: ParallelDecider<N, X>
+    D: ParallelDecider<C::Enumeration, N::Nonterminal, N::Terminal, X>
 {
     collection: C,
     _exists_tuple: PhantomData<(N, D, X)>
 }
 
-impl<C, N, D, X> HomogeneousParallelNode<C, N, D, X> where
+impl<C, N, D, X> ParallelBranchNode<C, N, D, X> where
     N: BehaviorTreeNode + ?Sized + 'static,
     C: NodeCollection<N>,
-    D: ParallelDecider<N, X>
+    D: ParallelDecider<C::Enumeration, N::Nonterminal, N::Terminal, X>
 {
-    fn new() -> HomogeneousParallelNode<C, N, D, X> {
-        HomogeneousParallelNode {
+    fn new() -> ParallelBranchNode<C, N, D, X> {
+        ParallelBranchNode {
             collection: C::default(),
             _exists_tuple: PhantomData
         }
     }
 
-    fn from_iter<I>(iter: I) -> HomogeneousParallelNode<C, N, D, X> where 
+    fn from_iter<I>(iter: I) -> ParallelBranchNode<C, N, D, X> where 
         I: Iterator<Item=N>
     {
-        HomogeneousParallelNode {
+        ParallelBranchNode {
             collection: C::from_iter(iter),
             _exists_tuple: PhantomData
         }
     }
 }
 
-impl<C, N, D, X> Default for HomogeneousParallelNode<C, N, D, X> where
+impl<C, N, D, X> Default for ParallelBranchNode<C, N, D, X> where
     N: BehaviorTreeNode + ?Sized + 'static,
     C: NodeCollection<N>,
-    D: ParallelDecider<N, X> 
+    D: ParallelDecider<C::Enumeration, N::Nonterminal, N::Terminal, X>
 {
-    fn default() -> HomogeneousParallelNode<C, N, D, X> {
-        HomogeneousParallelNode::new()
+    fn default() -> ParallelBranchNode<C, N, D, X> {
+        ParallelBranchNode::new()
     }
 }
 
-impl<C, N, D, X> BehaviorTreeNode for HomogeneousParallelNode<C, N, D, X> where 
+impl<C, N, D, X> BehaviorTreeNode for ParallelBranchNode<C, N, D, X> where 
     N: BehaviorTreeNode + ?Sized + 'static,
     C: NodeCollection<N>,
-    D: ParallelDecider<N, X> 
+    D: ParallelDecider<C::Enumeration, N::Nonterminal, N::Terminal, X>
 {
     type Input = N::Input;
     type Nonterminal = Vec<Statepoint<N::Nonterminal, N::Terminal>>;
@@ -119,27 +109,24 @@ impl<C, N, D, X> BehaviorTreeNode for HomogeneousParallelNode<C, N, D, X> where
             .unzip();
         let decision = D::each_step(states.iter());
         match decision {
-            Decision::Stay(i, _e) => {
+            ParallelDecision::Stay(i) => {
                 let new_state;
                 {
                     let new_state_iter = nodes.into_iter()
-                        .zip(states.iter().enumerate())
-                        .map(|(node, (count, state))| match state {
-                            Statepoint::Nonterminal(n) => if i(&n) {
-                                C::get_for(count).unwrap()
+                        .zip(states.iter().zip(C::Enumeration::default().into_iter()))
+                        .map(|(node, (state, count))| match state {
+                            Statepoint::Nonterminal(n) => if i(count, &n) {
+                                C::get_for(count)
                             } else {
                                 node.unwrap()
                             },
-                            Statepoint::Terminal(_) => C::get_for(count).unwrap()
+                            Statepoint::Terminal(_) => C::get_for(count)
                         });
-                    new_state = HomogeneousParallelNode::from_iter(new_state_iter);
+                    new_state = ParallelBranchNode::from_iter(new_state_iter);
                 }
-                NodeResult::Nonterminal(
-                    states,
-                    new_state
-                )
+                NodeResult::Nonterminal(states, new_state)
             },
-            Decision::Exit(t) => NodeResult::Terminal(t)
+            ParallelDecision::Exit(t) => NodeResult::Terminal(t)
         }
         
     }

@@ -26,36 +26,34 @@ pub enum TerminalTransition<A, N> {
 /// machines. Somewhat more powerful than state machines, but in return, 
 /// requires some allocable space and some extra tolerance for amortized 
 /// runtime costs. 
-pub struct PushdownAutomaton <'k, I, A, G, N, T> where 
+pub struct PushdownAutomaton <'k, I, A, N, T> where 
     I: 'k,
-    G: Into<N> + 'k,
     N: FiniteStateAutomaton<'k> + 'k,
     T: FiniteStateAutomaton<'k> + 'k,
 {
     bottom: Option<T>,
     stack: Vec<N>,
     _i_exists: PhantomData<&'k I>,
-    _exists_tuple: PhantomData<(A, G)>,
+    _a_exists: PhantomData<A>
 }
 
-impl<'k, I, A, G, N, T> PushdownAutomaton<'k, I, A, G, N, T> where 
+impl<'k, I, A, N, T> PushdownAutomaton<'k, I, A, N, T> where 
     I: 'k,
-    G: Into<N> + 'k,
-    N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, G>> + 'k,
-    T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, G>> + 'k,
+    N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, N>> + 'k,
+    T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, N>> + 'k,
 {
-    pub fn new(terminal: T) -> PushdownAutomaton<'k, I, A, G, N, T> where 
+    pub fn new(terminal: T) -> PushdownAutomaton<'k, I, A, N, T> where 
     {
         PushdownAutomaton {
             bottom: Option::Some(terminal),
             stack: Vec::new(),
             _i_exists: PhantomData,
-            _exists_tuple: PhantomData,
+            _a_exists: PhantomData
         }
     }
 
     pub fn from_iterable<K, S>(terminal: T, prepush: S)
-    -> PushdownAutomaton<'k, I, A, G, N, T> where
+    -> PushdownAutomaton<'k, I, A, N, T> where
         K: Iterator<Item = N>,
         S: IntoIterator<Item = N, IntoIter = K> 
     {
@@ -63,7 +61,7 @@ impl<'k, I, A, G, N, T> PushdownAutomaton<'k, I, A, G, N, T> where
     }
 
     pub fn from_iter<K>(terminal: T, prepush: K) 
-    -> PushdownAutomaton<'k, I, A, G, N, T> where 
+    -> PushdownAutomaton<'k, I, A, N, T> where 
         K: Iterator<Item = N>
     {
         let to_use_vec = prepush.collect();
@@ -71,18 +69,17 @@ impl<'k, I, A, G, N, T> PushdownAutomaton<'k, I, A, G, N, T> where
             bottom: Option::Some(terminal),
             stack: to_use_vec,
             _i_exists: PhantomData,
-            _exists_tuple: PhantomData,
+            _a_exists: PhantomData,
         }
     }
 }
 
 #[inline]
-fn stack_elm_transition<'k, I, A, G, N, T> 
+fn stack_elm_transition<'k, I, A, N, T> 
     (stack: &mut Vec<N>, bottom: &mut Option<T>, input: &I) -> A where 
     I: 'k,
-    G: Into<N> + 'k,
-    N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, G>> + 'k,
-    T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, G>> + 'k,
+    N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, N>> + 'k,
+    T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, N>> + 'k,
 {
     match stack.pop() {
         Option::Some(mut val) => {
@@ -118,11 +115,10 @@ fn stack_elm_transition<'k, I, A, G, N, T>
     }
 }
 
-impl<'k, I, A, G, N, T> Automaton<'k> for PushdownAutomaton<'k, I, A, G, N, T> where 
+impl<'k, I, A, N, T> Automaton<'k> for PushdownAutomaton<'k, I, A, N, T> where 
     I: 'k,
-    G: Into<N> + 'k,
-    N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, G>> + 'k,
-    T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, G>> + 'k,
+    N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, N>> + 'k,
+    T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, N>> + 'k,
 {
     type Input = I;
     type Action = A;
@@ -151,71 +147,52 @@ impl<'k, I, A, G, N, T> Automaton<'k> for PushdownAutomaton<'k, I, A, G, N, T> w
 mod test {
 
     use automaton::Automaton;
-    use internal_state_machine::InternalStateMachine;
+    use internal_state_machine::{InternalTransition, InternalStateMachine};
     use pushdown_automaton::{
             PushdownAutomaton, PushdownTransition, TerminalTransition};
-
-    #[derive(Copy, Clone)]
-    struct NonterminalProxy;
-
-    impl From<NonterminalProxy> for InternalStateMachine<'static, i64, i64, 
-        PushdownTransition<i64, NonterminalProxy>, NonterminalFunction> 
-    {
-        fn from(_this: NonterminalProxy) -> InternalStateMachine<'static, i64, i64, 
-            PushdownTransition<i64, NonterminalProxy>, NonterminalFunction> 
-        {
-            InternalStateMachine::new(NonterminalFunction, 0)
-        }
-    }
 
     #[derive(Copy, Clone)]
     struct TerminalFunction;
     #[derive(Copy, Clone)]
     struct NonterminalFunction;
 
-    fn terminal_transition (new: &i64, internal: &mut i64) 
-        -> TerminalTransition<i64, NonterminalProxy> 
-    {
-        if *new == 0 {
-            TerminalTransition::Push(*internal, NonterminalProxy)
-        } else {
-            let orig_internal = *internal;
-            *internal = *new;
-            TerminalTransition::Stay(orig_internal)
+    impl InternalTransition for TerminalFunction {
+        type Internal = i64;
+        type Input = i64;
+        type Action = TerminalTransition<i64, 
+            InternalStateMachine<'static, NonterminalFunction>>;
+        fn step (new: &i64, internal: &mut i64) -> Self::Action {
+            if *new == 0 {
+                TerminalTransition::Push(*internal, InternalStateMachine::with(
+                    NonterminalFunction, 
+                    0
+                ))
+            } else {
+                let orig_internal = *internal;
+                *internal = *new;
+                TerminalTransition::Stay(orig_internal)
+            }
         }
     }
 
-    fn nonterminal_transition (new: &i64, internal: &mut i64)
-        -> PushdownTransition<i64, NonterminalProxy>
-    {
-        if *new == 0 {
-            PushdownTransition::Push(*internal, NonterminalProxy)
-        } else if *new < 0 {
-            PushdownTransition::Pop(*internal)
-        } else {
-            let orig_internal = *internal;
-            *internal = *new;
-            PushdownTransition::Stay(orig_internal)
-        }
-    }
-
-    impl From<TerminalFunction> for fn(&i64, &mut i64) 
-        -> TerminalTransition<i64, NonterminalProxy>
-    {
-        fn from(this: TerminalFunction) -> fn(&i64, &mut i64) 
-            -> TerminalTransition<i64, NonterminalProxy>
-        {
-            terminal_transition
-        }
-    }
-
-    impl From<NonterminalFunction> for fn(&i64, &mut i64)
-        -> PushdownTransition<i64, NonterminalProxy>
-    {
-        fn from(this: NonterminalFunction) -> fn(&i64, &mut i64)
-            -> PushdownTransition<i64, NonterminalProxy>
-        {
-            nonterminal_transition
+    impl InternalTransition for NonterminalFunction {
+        type Internal = i64;
+        type Input = i64;
+        type Action = PushdownTransition<i64, 
+            InternalStateMachine<'static, NonterminalFunction>>;
+        fn step (new: &i64, internal: &mut i64) -> Self::Action {
+            if *new == 0 {
+                PushdownTransition::Push(*internal, InternalStateMachine::with(
+                    NonterminalFunction, 
+                    0
+                ))
+            } else if *new < 0 {
+                PushdownTransition::Pop(*internal)
+            } else {
+                let orig_internal = *internal;
+                *internal = *new;
+                PushdownTransition::Stay(orig_internal)
+            }
         }
     }
 
@@ -223,9 +200,8 @@ mod test {
     fn check_def () {
         //from_iterable constructor used to assist type inference
         let mut test_pushdown = PushdownAutomaton::from_iterable(
-            InternalStateMachine::new(TerminalFunction, 0),
-            Vec::<InternalStateMachine<i64, i64, PushdownTransition<i64, NonterminalProxy>, 
-                NonterminalFunction>>::new()
+            InternalStateMachine::with(TerminalFunction, 0),
+            Vec::<InternalStateMachine<NonterminalFunction>>::new()
         );
         // 0|
         assert!(test_pushdown.transition(&3) == 0);

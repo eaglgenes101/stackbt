@@ -135,3 +135,8 @@ impl<'k, M, N, T> BehaviorTreeNode for LeafNode<'k, M, N, T> where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    
+}

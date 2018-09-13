@@ -1,9 +1,0 @@
-cargo-features = ["rename-dependency"]
-
-[package]
-name = "stackbt_jump_table"
-version = "0.1.0"
-authors = ["eaglgenes101 <eaglgenes101@gmail.com>"]
-
-[dependencies]
-stackbt_automata_impl = { path = "../automata_impl" }

@@ -2,109 +2,115 @@ use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 use std::mem::swap;
 
+pub trait DualTransition: Copy {
+    type Internal;
+    type Input;
+    type Action;
+    fn step(self, &Self::Input, &mut Self::Internal) -> (Self::Action, Self);
+}
+
 /// State machine implementation which combines the changing functions of 
 /// ref_state_machine with the internal mutable state of 
 /// internal_state_machine. This is the most general state machine form in 
 /// this crate, but the other two are generally easier to work with. 
 #[derive(Copy, Clone)]
-pub struct DualStateMachine<'k, I, S, A, C> where 
-    C: Into<fn(&I, &mut S) -> (A, C)> + 'k,
-    S: 'k,
-    I: 'k
+pub struct DualStateMachine<'k, C> where 
+    C: DualTransition + 'k
 {
     state_fn: Option<C>, 
-    internal: S,
-    _i_exists: PhantomData<&'k I>,
-    _a_exists: PhantomData<A>
+    internal: C::Internal,
+    _lifetime_check: PhantomData<&'k C>
 }
 
-impl<'k, I, S, A, C> DualStateMachine<'k, I, S, A, C> where
-    C: Into<fn(&I, &mut S) -> (A, C)> + 'k,
-    S: 'k
+impl<'k, C> DualStateMachine<'k, C> where
+    C: DualTransition + 'k
 {
-    pub fn new(calling_fn: C, init_state: S) -> DualStateMachine<'k, I, S, A, C> {
+    pub fn new(calling_fn: C, init_state: C::Internal) -> DualStateMachine<'k, C> {
         DualStateMachine {
             state_fn: Option::Some(calling_fn),
             internal: init_state,
-            _i_exists: PhantomData,
-            _a_exists: PhantomData
+            _lifetime_check: PhantomData
         }
     }
 }
 
 #[inline]
-fn dual_state_transition<'k, I, S, C, A>(fn_r: &mut Option<C>, st_r: &mut S, in_r: &I) 
-    -> A where
-    C: Into<fn(&I, &mut S) -> (A, C)> + 'k,
-    S: 'k
+fn dual_state_transition<C>(fn_ref: &mut Option<C>, store_ref: &mut C::Internal, 
+    input_ref: &C::Input) -> C::Action where
+    C: DualTransition
 {
-    let mut out_fn = Option::None;
-    swap(fn_r, &mut out_fn);
-    let (action, new_fn) = (out_fn.unwrap().into())(&in_r, st_r);
-    *fn_r = Option::Some(new_fn);
+    let mut tmp_fn = Option::None;
+    swap(fn_ref, &mut tmp_fn);
+    let (action, new_fn) = tmp_fn.unwrap().step(input_ref, store_ref);
+    *fn_ref = Option::Some(new_fn);
     action
 }
 
-impl<'k, I, S, A, C> Automaton<'k> for DualStateMachine<'k, I, S, A, C> where 
-    C: Into<fn(&I, &mut S) -> (A, C)> + 'k,
-    S: 'k
+impl<'k, C> Automaton<'k> for DualStateMachine<'k, C> where 
+    C: DualTransition + 'k
 {
-    type Input = I;
-    type Action = A;
+    type Input = C::Input;
+    type Action = C::Action;
     #[inline]
-    fn transition(&mut self, input: &I) -> A{
+    fn transition(&mut self, input: &C::Input) -> C::Action {
         dual_state_transition(&mut self.state_fn, &mut self.internal, &input)
     }
     
-    fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&I) -> A + 't> where 'k: 't {
+    fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&C::Input) -> C::Action + 't> where 
+        'k: 't 
+    {
         let mut state_fn_part = &mut self.state_fn;
         let mut internal_part = &mut self.internal;
-        Box::new(move |input: &I| -> A {
+        Box::new(move |input: &C::Input| -> C::Action {
             dual_state_transition(state_fn_part, internal_part, &input)
         })
     }
 
-    fn into_fnmut(self) -> Box<FnMut(&I) -> A + 'k> {
+    fn into_fnmut(self) -> Box<FnMut(&C::Input) -> C::Action + 'k> {
         let mut state_fn_part = self.state_fn;
         let mut internal_part = self.internal;
-        Box::new(move |input: &I| -> A {
+        Box::new(move |input: &C::Input| -> C::Action {
             dual_state_transition(&mut state_fn_part, &mut internal_part, &input)
         })
     }
 }
 
-impl<'k, I, S, A, C> FiniteStateAutomaton<'k> for DualStateMachine<'k, I, S, A, C> where 
-    S: Copy + 'k,
-    C: Into<fn(&I, &mut S) -> (A, C)> + Copy + 'k
+impl<'k, C> FiniteStateAutomaton<'k> for DualStateMachine<'k, C> where 
+    C: DualTransition
 {}
 
 mod tests {
+    use dual_state_machine::DualTransition;
+
     #[derive(Copy, Clone)]
-    struct ThingBob {
-        fn_ref: fn(&i64, &mut i64) -> (i64, ThingBob)
+    enum ThingMachine{
+        Add,
+        Subtract
     }
 
-    impl From<ThingBob> for fn(&i64, &mut i64) -> (i64, ThingBob) {
-        fn from(fn_box: ThingBob) -> fn(&i64, &mut i64) -> (i64, ThingBob) {
-            fn_box.fn_ref
-        }
-    }
-
-    fn add_fn(add: &i64, sum: &mut i64) -> (i64, ThingBob) {
-        if *add == 0 {
-            (*sum, ThingBob { fn_ref: sub_fn })
-        } else {
-            *sum += add;
-            (*sum, ThingBob { fn_ref: add_fn })
-        }
-    }
-
-    fn sub_fn(sub: &i64, sum: &mut i64) -> (i64, ThingBob) {
-        if *sub == 0 {
-            (*sum, ThingBob { fn_ref: add_fn })
-        } else {
-            *sum -= sub;
-            (*sum, ThingBob { fn_ref: sub_fn })
+    impl DualTransition for ThingMachine {
+        type Internal = i64;
+        type Input = i64;
+        type Action = i64;
+        fn step(self, input: &i64, state: &mut i64) -> (i64, ThingMachine) {
+            match self {
+                ThingMachine::Add => {
+                    if *input == 0 {
+                        (*state, ThingMachine::Subtract)
+                    } else {
+                        *state += input;
+                        (*state, ThingMachine::Add)
+                    }
+                },
+                ThingMachine::Subtract => {
+                    if *input == 0 {
+                        (*state, ThingMachine::Add)
+                    } else {
+                        *state -= input;
+                        (*state, ThingMachine::Subtract)
+                    }
+                }
+            }
         }
     }
 
@@ -112,8 +118,7 @@ mod tests {
     fn check_def() {
         use dual_state_machine::DualStateMachine;
         use automaton::Automaton;
-        let init_fn: fn(&i64, &mut i64) -> (i64, ThingBob) = add_fn;
-        let mut x = DualStateMachine::new(ThingBob { fn_ref: init_fn }, 0);
+        let mut x = DualStateMachine::new(ThingMachine::Add, 0);
         assert!(x.transition(&2) == 2);
         assert!(x.transition(&0) == 2);
         assert!(x.transition(&4) == -2);
