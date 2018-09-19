@@ -42,8 +42,7 @@ impl<'k, I, A, N, T> PushdownAutomaton<'k, I, A, N, T> where
     N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, N>> + 'k,
     T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, N>> + 'k,
 {
-    pub fn new(terminal: T) -> PushdownAutomaton<'k, I, A, N, T> where 
-    {
+    pub fn new(terminal: T) -> PushdownAutomaton<'k, I, A, N, T> {
         PushdownAutomaton {
             bottom: Option::Some(terminal),
             stack: Vec::new(),
@@ -143,9 +142,9 @@ impl<'k, I, A, N, T> Automaton<'k> for PushdownAutomaton<'k, I, A, N, T> where
         })
     }
 }
+
 #[cfg(test)]
 mod test {
-
     use automaton::Automaton;
     use internal_state_machine::{InternalTransition, InternalStateMachine};
     use pushdown_automaton::{
@@ -204,23 +203,23 @@ mod test {
             Vec::<InternalStateMachine<NonterminalFunction>>::new()
         );
         // 0|
-        assert!(test_pushdown.transition(&3) == 0);
+        assert_eq!(test_pushdown.transition(&3), 0);
         // 3|
-        assert!(test_pushdown.transition(&4) == 3);
+        assert_eq!(test_pushdown.transition(&4), 3);
         // 4|
-        assert!(test_pushdown.transition(&0) == 4);
+        assert_eq!(test_pushdown.transition(&0), 4);
         // 4| 0,
-        assert!(test_pushdown.transition(&5) == 0);
+        assert_eq!(test_pushdown.transition(&5), 0);
         // 4| 5,
-        assert!(test_pushdown.transition(&0) == 5);
+        assert_eq!(test_pushdown.transition(&0), 5);
         // 4| 5, 0,
-        assert!(test_pushdown.transition(&9) == 0);
+        assert_eq!(test_pushdown.transition(&9), 0);
         // 4| 5, 9,
-        assert!(test_pushdown.transition(&-2) == 9);
+        assert_eq!(test_pushdown.transition(&-2), 9);
         // 4| 5,
-        assert!(test_pushdown.transition(&-1) == 5);
+        assert_eq!(test_pushdown.transition(&-1), 5);
         // 4|
-        assert!(test_pushdown.transition(&2) == 4);
+        assert_eq!(test_pushdown.transition(&2), 4);
     }
 
 }

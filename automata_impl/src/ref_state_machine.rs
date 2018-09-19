@@ -2,6 +2,7 @@ use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 use std::mem::swap;
 
+/// Transition trait for RefStateMachine. 
 pub trait ReferenceTransition: Copy {
     type Input;
     type Action;
@@ -27,6 +28,14 @@ impl <'k, C> RefStateMachine<'k, C> where
             current_state: Option::Some(init_state),
             _lifetime_check: PhantomData
         }
+    }
+}
+
+impl <'k, C> Default for RefStateMachine<'k, C> where 
+    C: ReferenceTransition + Default + 'k
+{
+    fn default() -> RefStateMachine<'k, C> {
+        RefStateMachine::new(C::default())
     }
 }
 
@@ -73,6 +82,7 @@ impl <'k, C> FiniteStateAutomaton<'k> for RefStateMachine<'k, C> where
     C: ReferenceTransition + 'k
 {}
 
+#[cfg(test)]
 mod tests {
     use ref_state_machine::ReferenceTransition;
 

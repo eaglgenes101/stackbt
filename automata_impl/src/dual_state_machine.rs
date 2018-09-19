@@ -2,6 +2,7 @@ use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 use std::mem::swap;
 
+/// Transition trait for DualStateMachine. 
 pub trait DualTransition: Copy {
     type Internal;
     type Input;
@@ -10,9 +11,9 @@ pub trait DualTransition: Copy {
 }
 
 /// State machine implementation which combines the changing functions of 
-/// ref_state_machine with the internal mutable state of 
-/// internal_state_machine. This is the most general state machine form in 
-/// this crate, but the other two are generally easier to work with. 
+/// RefStateMachine with the internal mutable state of InternalStateMachine. 
+/// This is the most general state machine form in this crate, but the other 
+/// two are generally easier to work with. 
 #[derive(Copy, Clone)]
 pub struct DualStateMachine<'k, C> where 
     C: DualTransition + 'k
@@ -31,6 +32,15 @@ impl<'k, C> DualStateMachine<'k, C> where
             internal: init_state,
             _lifetime_check: PhantomData
         }
+    }
+}
+
+impl<'k, C> Default for DualStateMachine<'k, C> where
+    C: DualTransition + Default + 'k,
+    C::Internal: Default
+{
+    fn default() -> DualStateMachine<'k, C> {
+        DualStateMachine::new(C::default(), C::Internal::default())
     }
 }
 
@@ -79,6 +89,7 @@ impl<'k, C> FiniteStateAutomaton<'k> for DualStateMachine<'k, C> where
     C: DualTransition
 {}
 
+#[cfg(test)]
 mod tests {
     use dual_state_machine::DualTransition;
 
@@ -119,10 +130,10 @@ mod tests {
         use dual_state_machine::DualStateMachine;
         use automaton::Automaton;
         let mut x = DualStateMachine::new(ThingMachine::Add, 0);
-        assert!(x.transition(&2) == 2);
-        assert!(x.transition(&0) == 2);
-        assert!(x.transition(&4) == -2);
-        assert!(x.transition(&0) == -2);
-        assert!(x.transition(&10) == 8);
+        assert_eq!(x.transition(&2), 2);
+        assert_eq!(x.transition(&0), 2);
+        assert_eq!(x.transition(&4), -2);
+        assert_eq!(x.transition(&0), -2);
+        assert_eq!(x.transition(&10), 8);
     }
 }

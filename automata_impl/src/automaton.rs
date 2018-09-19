@@ -26,7 +26,8 @@ pub trait Automaton<'k> {
 
 /// Marker trait for Finite State Automata, which are a restricted class of 
 /// automata that are quite well behaved. In particular, they occupy fixed 
-/// memory, and thus do not need extra allocation to operate. 
+/// memory, and thus do not need extra allocation to operate, and instances 
+/// with known type can be copied around freely. 
 pub trait FiniteStateAutomaton<'k>: Automaton<'k> {}
 
 #[cfg(test)]
@@ -55,14 +56,14 @@ mod tests {
         let zero_inf = 0..8;
         let machine = InternalStateMachine::with(ThingMachine, 0);
         let mut scanner = Automaton::into_scan_iter(machine, zero_inf);
-        assert!(scanner.next().unwrap() == 0);
-        assert!(scanner.next().unwrap() == 0);
-        assert!(scanner.next().unwrap() == 1);
-        assert!(scanner.next().unwrap() == 3);
-        assert!(scanner.next().unwrap() == 6);
-        assert!(scanner.next().unwrap() == 10);
-        assert!(scanner.next().unwrap() == 15);
-        assert!(scanner.next().unwrap() == 21);
+        assert_eq!(scanner.next().unwrap(), 0);
+        assert_eq!(scanner.next().unwrap(), 0);
+        assert_eq!(scanner.next().unwrap(), 1);
+        assert_eq!(scanner.next().unwrap(), 3);
+        assert_eq!(scanner.next().unwrap(), 6);
+        assert_eq!(scanner.next().unwrap(), 10);
+        assert_eq!(scanner.next().unwrap(), 15);
+        assert_eq!(scanner.next().unwrap(), 21);
         assert!(scanner.next().is_none());
     }
 }

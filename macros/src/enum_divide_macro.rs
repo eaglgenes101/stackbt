@@ -2,7 +2,7 @@
 #[macro_export]
 macro_rules! enum_variant_define {
     (
-        ( $( $vis:tt )* ) $oldname:ident {
+        $oldname:ident {
             $( $( $oldvariant:ident )|* => $variant:ident ),*
         }
     ) => {
@@ -12,23 +12,93 @@ macro_rules! enum_variant_define {
                 $( $oldvariant ),*
             }
 
-            impl From < $oldname > for $variant {
-                fn from(this: $oldname ) -> $variant {
-                    match this {
-                        $( $oldname :: $oldvariant => $variant :: $oldvariant , )*
-                        _ => unreachable!("Attempted conversion outside domain")
-                    }
-                }
-            }
-
             impl From < $variant > for $oldname {
-                fn from(this: $variant ) -> $oldname {
+                fn from( this: $variant ) -> $oldname {
                     match this {
                         $( $variant :: $oldvariant => $oldname :: $oldvariant ),*
                     }
                 }
             }
         )*
+    };
+
+    (
+        $visibility:vis $oldname:ident {
+            $( $( $oldvariant:ident )|* => $variant:ident ),*
+        }
+    ) => {
+        $(
+            #[derive(Copy, Clone, Hash, Debug, Eq, PartialEq)]
+            $visibility enum $variant {
+                $( $oldvariant ),*
+            }
+
+            impl From < $variant > for $oldname {
+                fn from( this: $variant ) -> $oldname {
+                    match this {
+                        $( $variant :: $oldvariant => $oldname :: $oldvariant ),*
+                    }
+                }
+            }
+        )*
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! enum_divide_from_body {
+    (@munch 
+        $var:ident ; $name:ident : $oldname:ident ; ; 
+        $( ( $( $from:tt )* ) => ( $( $to:tt )* ) ),*
+    ) => {
+        match $var {
+            $( $( $from )* => $( $to )* ),*
+        }
+    };
+
+    (@munch 
+        $var:ident ; $name:ident : $oldname:ident ;
+        $( $firstoldvariant:ident )|* => $firstvariant:ident ; 
+        $( ( $( $from:tt )* ) => ( $( $to:tt )* ) ),*
+    ) => {
+        enum_divide_from_body!(@munch
+            $var ; $name : $oldname ; ; 
+            $( ( $( $from )* ) => ( $( $to )* ) , )*
+            $(
+                ( $name :: $firstvariant (
+                    $firstvariant :: $firstoldvariant
+                ) ) => ( $oldname :: $firstoldvariant ) 
+            ),*
+        );
+    };
+
+    (@munch 
+        $var:ident ; $name:ident : $oldname:ident ;
+        $( $firstoldvariant:ident )|* => $firstvariant:ident ,
+        $( $( $oldvariant:ident )|* => $variant:ident ),* ; 
+        $( ( $( $from:tt )* ) => ( $( $to:tt )* ) ),*
+    ) => {
+        enum_divide_from_body!(@munch
+            $var ; $name : $oldname ;
+            $( $( $oldvariant )|* => $variant ),* ; 
+            $( ( $( $from )* ) => ( $( $to )* ) , )*
+            $(
+                ( $name :: $firstvariant (
+                    $firstvariant :: $firstoldvariant
+                ) ) => ( $oldname :: $firstoldvariant ) 
+            ),*
+        );
+    };
+
+    (
+        $var:ident ; $name:ident : $oldname:ident {
+            $( $( $oldvariant:ident )|* => $variant:ident ),*
+        }
+    ) => {
+        enum_divide_from_body!(@munch
+            $var ; $name : $oldname ;
+            $( $( $oldvariant )|* => $variant ),* ;
+        );
     }
 }
 
@@ -45,8 +115,10 @@ macro_rules! enum_divide_from {
             fn from(old: $oldname) -> $name {
                 match old {
                     $( 
-                        $( $oldname :: $oldvariant  => 
-                        $name :: $variant ( $variant :: $oldvariant ) ),*
+                        $( 
+                            $oldname :: $oldvariant  => 
+                            $name :: $variant ( $variant :: $oldvariant ) 
+                        ),*
                     ),*
                 }
             }
@@ -54,9 +126,11 @@ macro_rules! enum_divide_from {
 
         impl From< $name > for $oldname {
             fn from( this: $name ) -> $oldname {
-                match this {
-                    $( $name :: $variant (n) => n.into() ),*
-                }
+                enum_divide_from_body!(
+                    this ; $name : $oldname {
+                        $( $( $oldvariant )|* => $variant ),*
+                    }
+                )
             }
         }
     }
@@ -67,7 +141,7 @@ macro_rules! enum_divide_from {
 macro_rules! enum_divide_main {
     (
         $( #[ $mval:meta ] )*
-        ( $( $vis:tt )* ) enum $name:ident : $oldname:ident {
+        $name:ident : $oldname:ident {
             $( 
                 $( #[ $emval:meta ] )*
                 $( $oldvariant:ident )|* => $variant:ident
@@ -77,7 +151,7 @@ macro_rules! enum_divide_main {
 
         $( #[ $mval ] )*
         #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq)]
-        $( $vis )* enum $name {
+        enum $name {
             $( 
                 $( #[ $emval ] )*
                 $variant ( $variant )
@@ -85,7 +159,39 @@ macro_rules! enum_divide_main {
         }
 
         enum_variant_define!(
-            ( $( $vis )* ) $oldname {
+            $oldname {
+                $( $( $oldvariant )|* => $variant ),*
+            }
+        );
+
+        enum_divide_from!(
+            $name : $oldname {
+                $( $( $oldvariant )|* => $variant ),*
+            }
+        );
+    };
+
+    (
+        $( #[ $mval:meta ] )*
+        $visibility:vis $name:ident : $oldname:ident {
+            $( 
+                $( #[ $emval:meta ] )*
+                $( $oldvariant:ident )|* => $variant:ident
+            ),*
+        }
+    ) => {
+
+        $( #[ $mval ] )*
+        #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq)]
+        $visibility enum $name {
+            $( 
+                $( #[ $emval ] )*
+                $variant ( $variant )
+            ) , *
+        }
+
+        enum_variant_define!(
+            $visibility $oldname {
                 $( $( $oldvariant )|* => $variant ),*
             }
         );
@@ -105,7 +211,7 @@ macro_rules! enum_divide_main {
 /// #[attribute_0]
 /// #[attribute_1]
 /// #[attribute_2]
-/// enum NewName: match OldName {
+/// enum NewName: OldName {
 ///     OldVariant00 | OldVariant01 => NewVariant0,
 ///     #[field_attribute_0]
 ///     #[field_attribute_1]
@@ -122,9 +228,7 @@ macro_rules! enum_divide_main {
 /// From this, the macro will expand to a new enum with the listed new 
 /// variants, as well as corresponding traits, including one for conversion 
 /// from the old enum to the new one according to the specified mappings 
-/// between old and new enum variants. The generated conversion is 
-/// irreversible, and does not preserve information about which old enum 
-/// variant corresponds to each new one. 
+/// between old and new enum variants. 
 #[macro_export]
 macro_rules! enum_divide {
     (
@@ -138,7 +242,7 @@ macro_rules! enum_divide {
     ) => {
         enum_divide_main!(
             $( #[ $mval ] )*
-            () enum $name : $oldname {
+            $name : $oldname {
                 $( 
                     $( #[ $emval ] )*
                     $( $oldvariant )|* => $variant
@@ -149,7 +253,7 @@ macro_rules! enum_divide {
 
     (
         $( #[ $mval:meta ] )*
-        pub enum $name:ident : $oldname:ident {
+        $visibility:vis enum $name:ident : $oldname:ident {
             $( 
                 $( #[ $emval:meta ] )*
                 $( $oldvariant:ident )|* => $variant:ident
@@ -158,27 +262,7 @@ macro_rules! enum_divide {
     ) => {
         enum_divide_main!(
             $( #[ $mval ] )*
-            ( pub ) enum $name : $oldname {
-                $( 
-                    $( #[ $emval ] )*
-                    $( $oldvariant )|* => $variant
-                ),*
-            }
-        );
-    };
-
-    (
-        $( #[ $mval:meta ] )*
-        pub $place:tt enum $name:ident : $oldname:ident {
-            $( 
-                $( #[ $emval:meta ] )*
-                $( $oldvariant:ident )|* => $variant:ident
-            ),*
-        }
-    ) => {
-        enum_divide_main!(
-            $( #[ $mval ] )*
-            ( pub $place ) enum $name : $oldname {
+            $visibility $name : $oldname {
                 $( 
                     $( #[ $emval ] )*
                     $( $oldvariant )|* => $variant
@@ -189,6 +273,7 @@ macro_rules! enum_divide {
 }
 
 mod tests {
+
     enum Foo {
         Foo0,
         Foo1,

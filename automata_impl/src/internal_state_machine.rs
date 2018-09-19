@@ -1,6 +1,7 @@
 use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 
+/// Transition trait for InternalStateMachine. 
 pub trait InternalTransition: Copy {
     type Internal;
     type Input;
@@ -39,6 +40,18 @@ impl<'k, C> InternalStateMachine<'k, C> where
     pub fn with(_calling_fn: C, init_state: C::Internal) -> InternalStateMachine<'k, C> {
         InternalStateMachine {
             internal: init_state,
+            _lifetime_check: PhantomData
+        }
+    }
+} 
+
+impl<'k, C> Default for InternalStateMachine<'k, C> where 
+    C: InternalTransition + 'k,
+    C::Internal: Default
+{
+    fn default() -> InternalStateMachine<'k, C> {
+        InternalStateMachine {
+            internal: C::Internal::default(),
             _lifetime_check: PhantomData
         }
     }
@@ -99,9 +112,9 @@ mod tests {
         use internal_state_machine::InternalStateMachine;
         use automaton::Automaton;
         let mut x = InternalStateMachine::<ThingMachine>::new(0);
-        assert!(x.transition(&1) == 0);
-        assert!(x.transition(&2) == 1);
-        assert!(x.transition(&3) == 3);
-        assert!(x.transition(&6) == 6);
+        assert_eq!(x.transition(&1), 0);
+        assert_eq!(x.transition(&2), 1);
+        assert_eq!(x.transition(&3), 3);
+        assert_eq!(x.transition(&6), 6);
     }
 }

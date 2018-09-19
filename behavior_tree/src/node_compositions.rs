@@ -9,9 +9,13 @@ pub struct SerialRunner<E, N, T> where E: IntoIterator<Item=E> {
     _who_cares: PhantomData<(E, N, T)>
 }
 
-impl<E, N, T> SerialDecider<E, N, T, ()> for SerialRunner<E, N, T> where 
+impl<E, N, T> SerialDecider for SerialRunner<E, N, T> where 
     E: IntoIterator<Item=E>
 {
+    type Enum = E;
+    type Nonterm = N;
+    type Term = T;
+    type Exit = ();
     fn on_nonterminal(_ordinal: E, _statept: &N) -> NontermDecision<E, ()> {
         NontermDecision::Step
     }
@@ -32,9 +36,14 @@ pub struct SerialSelector<E, N> where E: IntoIterator<Item=E> {
     _who_cares: PhantomData<(E, N)>
 }
 
-impl<E, N> SerialDecider<E, N, bool, Option<E>> for SerialSelector<E, N> where 
+impl<E, N> SerialDecider for SerialSelector<E, N> where 
     E: IntoIterator<Item=E>
 {
+    type Enum = E;
+    type Nonterm = N;
+    type Term = bool;
+    type Exit = Option<E>;
+
     fn on_nonterminal(_ordinal: E, _statept: &N) -> NontermDecision<E, Option<E>> {
         NontermDecision::Step
     }
@@ -59,9 +68,13 @@ pub struct SerialSequence<E, N> where E: IntoIterator<Item=E> {
     _who_cares: PhantomData<(E, N)>
 }
 
-impl<E, N> SerialDecider<E, N, bool, Option<E>> for SerialSequence<E, N> where 
+impl<E, N> SerialDecider for SerialSequence<E, N> where 
     E: IntoIterator<Item=E>
 {
+    type Enum = E;
+    type Nonterm = N;
+    type Term = bool;
+    type Exit = Option<E>;
     fn on_nonterminal(_ordinal: E, _statept: &N) -> NontermDecision<E, Option<E>> {
         NontermDecision::Step
     }
@@ -80,55 +93,71 @@ impl<E, N> SerialDecider<E, N, bool, Option<E>> for SerialSequence<E, N> where
     }
 }
 
-/// Runs all nodes concurrently until they all return a trap state (indicated 
-/// by either a terminal or a nonterminal returning a statepoint terminal). 
-pub struct ParallelRunner<E, N, R, T> where E: IntoIterator<Item=E> {
-    _who_cares: PhantomData<(E, N, R, T)>
+pub struct ParallelRunner<I, N, R, T> {
+    _who_cares: PhantomData<(I, N, R, T)>
 }
 
-impl<E, N, R, T> ParallelDecider<E, Statepoint<N, R>, T, ()> for 
-    ParallelRunner<E, N, R, T> where 
-    E: IntoIterator<Item=E>,
+impl<I, N, R, T> ParallelDecider for ParallelRunner<I, N, R, T> where 
+    I: 'static,
     N: 'static,
-    R: 'static,
-    T: 'static
+    R: 'static + Clone,
+    T: 'static + Clone
 {
-    fn each_step<'k, K>(iterthing: K) -> ParallelDecision<E, Statepoint<N, R>, ()> where
-        K: Iterator<Item=&'k Statepoint<Statepoint<N, R>, T>> + 'k
+    type Input = I;
+    type Nonterm = Statepoint<N, R>;
+    type Term = T;
+    type Exit = Box<[Statepoint<R, T>]>;
+
+    fn each_step(_input: &I, states: Box<[Statepoint<Statepoint<N, R>, T>]>) -> 
+        ParallelDecision<Box<[Statepoint<Statepoint<N, R>, T>]>, Box<[Statepoint<R, T>]>> 
     {
-        let mut it = iterthing;
-        if it.any(|elm| match elm {
+        if states.iter().any(|val| match val {
             Statepoint::Nonterminal(Statepoint::Nonterminal(_)) => true,
-            _ => false
+            _ => false 
         }) {
-            ParallelDecision::Stay(Box::new(|_, _| false))
+            ParallelDecision::Stay(states)
         } else {
-            ParallelDecision::Exit(())
+            ParallelDecision::Exit(
+                states.iter().map(|val| match val {
+                    Statepoint::Nonterminal(v) => match v {
+                        Statepoint::Terminal(k) => Statepoint::Nonterminal(k.clone()),
+                        _ => unreachable!("No currently pending nodes")
+                    },
+                    Statepoint::Terminal(k) => Statepoint::Terminal(k.clone())
+                }).collect::<Vec<_>>().into_boxed_slice()
+            )
         }
     }
 }
 
-/// Runs all nodes concurrently, stopping all nodes as soon as one terminates. 
-pub struct ParallelRacer<E, N> where E: IntoIterator<Item=E> {
-    _who_cares: PhantomData<(E, N)>
+pub struct ParallelRacer<I, N, T>  {
+    _who_cares: PhantomData<(I, N, T)>
 }
 
-impl<E, N, T> ParallelDecider<E, N, T, ()> for ParallelRacer<E, N> where 
-    E: IntoIterator<Item=E>,
+impl<I, N, T> ParallelDecider for ParallelRacer<I, N, T> where 
+    I: 'static,
     N: 'static,
-    T: 'static
+    T: 'static + Clone
 {
-    fn each_step<'k, K>(iterthing: K) -> ParallelDecision<E, N, ()> where
-        K: Iterator<Item=&'k Statepoint<N, T>> + 'k
+    type Input = I;
+    type Nonterm = N;
+    type Term = T;
+    type Exit = (usize, T);
+
+    fn each_step(_input: &I, states: Box<[Statepoint<N, T>]>) -> 
+        ParallelDecision<Box<[Statepoint<N, T>]>, (usize, T)> 
     {
-        let mut it = iterthing;
-        if it.any(|elm| match elm {
-            Statepoint::Terminal(_) => true,
-            _ => false
-        }) {
-            ParallelDecision::Exit(())
-        } else {
-            ParallelDecision::Stay(Box::new(|_, _| false))
+        let mut retval = Option::None;
+        for value in states.iter().enumerate() {
+            if let Statepoint::Terminal(val) = value.1 {
+                retval = Option::Some((value.0, val.clone()));
+                break;
+            }
+        };
+        match retval {
+            Option::None => ParallelDecision::Stay(states),
+            Option::Some(v) => ParallelDecision::Exit(v)
         }
+
     }
 }
