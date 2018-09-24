@@ -54,22 +54,17 @@ macro_rules! enum_iter_from {
             $( $variant:ident ),+
         }
     ) => {
-        struct $itername {
-            f: Option < $name >
-        }
+        struct $itername(Option < $name > );
 
         impl Iterator for $itername {
             type Item = $name;
             
             fn next(&mut self) -> Option<Self::Item> {
-                let orig = self.f;
+                let orig = self.0;
                 match orig {
                     Option::None => Option::None,
                     Option::Some(x) => {
-                        let next = enum_eater!(
-                            x; $name ; $( $variant ),+
-                        );
-                        self.f = next;
+                        self.0 = enum_eater!( x; $name ; $( $variant ),+ );
                         orig
                     }
                 }
@@ -79,11 +74,8 @@ macro_rules! enum_iter_from {
         impl IntoIterator for $name {
             type Item = $name;
             type IntoIter = $itername;
-
             fn into_iter(self) -> Self::IntoIter {
-                $itername {
-                    f: Option::Some(self)
-                }
+                $itername(Option::Some(self))
             }
         }
     };
@@ -93,22 +85,17 @@ macro_rules! enum_iter_from {
             $( $variant:ident ),+
         }
     ) => {
-        $visibility struct $itername {
-            f: Option < $name >
-        }
+        $visibility struct $itername(Option < $name > );
 
         impl Iterator for $itername {
             type Item = $name;
             
             fn next(&mut self) -> Option<Self::Item> {
-                let orig = self.f;
+                let orig = self.0;
                 match orig {
                     Option::None => Option::None,
                     Option::Some(x) => {
-                        let next = enum_eater!(
-                            x; $name ; $( $variant ),+
-                        );
-                        self.f = next;
+                        self.0 = enum_eater!(x; $name ; $( $variant ),+ );
                         orig
                     }
                 }
@@ -118,11 +105,8 @@ macro_rules! enum_iter_from {
         impl IntoIterator for $name {
             type Item = $name;
             type IntoIter = $itername;
-
             fn into_iter(self) -> Self::IntoIter {
-                $itername {
-                    f: Option::Some(self)
-                }
+                $itername (Option::Some(self))
             }
         }
     }

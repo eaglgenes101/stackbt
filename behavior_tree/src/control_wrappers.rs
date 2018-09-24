@@ -1,21 +1,19 @@
 use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
 use std::marker::PhantomData;
 
-pub enum GuardedTerminal<N, T> {
-    GuardFailure(N),
-    NormalTermination(T)
-}
+pub struct GuardFailure<N>(N); 
 
 pub trait NodeGuard {
     type Input;
-    fn test(&Self::Input) -> bool;
+    type Nonterminal;
+    fn test(&Self::Input, &Self::Nonterminal) -> bool;
 }
 
 /// Guarded node, which executes the node it guards only as long as a guard 
 /// condition holds. 
 pub struct GuardedNode<M, G> where
     M: BehaviorTreeNode,
-    G: NodeGuard<Input=M::Input>
+    G: NodeGuard<Input=M::Input, Nonterminal=M::Nonterminal>
 {
     machine: M,
     _exists_tuple: PhantomData<G>
@@ -23,7 +21,7 @@ pub struct GuardedNode<M, G> where
 
 impl<M, G> GuardedNode<M, G> where 
     M: BehaviorTreeNode,
-    G: NodeGuard<Input=M::Input>
+    G: NodeGuard<Input=M::Input, Nonterminal=M::Nonterminal>
 {
     pub fn new(machine: M) -> GuardedNode<M, G> {
         GuardedNode {
@@ -42,7 +40,7 @@ impl<M, G> GuardedNode<M, G> where
 
 impl<M, G> Default for GuardedNode<M, G> where 
     M: BehaviorTreeNode + Default,
-    G: NodeGuard<Input=M::Input>
+    G: NodeGuard<Input=M::Input, Nonterminal=M::Nonterminal>
 {
     fn default() -> GuardedNode<M, G> {
         GuardedNode::new(M::default())
@@ -51,25 +49,25 @@ impl<M, G> Default for GuardedNode<M, G> where
 
 impl<M, G> BehaviorTreeNode for GuardedNode<M, G> where
     M: BehaviorTreeNode,
-    G: NodeGuard<Input=M::Input>
+    G: NodeGuard<Input=M::Input, Nonterminal=M::Nonterminal>
 {
     type Input = M::Input;
     type Nonterminal = M::Nonterminal;
-    type Terminal = GuardedTerminal<M::Nonterminal, M::Terminal>;
+    type Terminal = Result<M::Terminal, GuardFailure<M::Nonterminal>>;
 
     fn step(self, input: &M::Input) -> NodeResult<M::Nonterminal, 
         Self::Terminal, Self> 
     {
         match self.machine.step(input) {
             NodeResult::Nonterminal(n, m) => {
-                if G::test(input) {
+                if G::test(input, &n) {
                     NodeResult::Nonterminal(n, GuardedNode::new(m))
                 } else {
-                    NodeResult::Terminal(GuardedTerminal::GuardFailure(n))
+                    NodeResult::Terminal(Result::Err(GuardFailure(n)))
                 }
             },
             NodeResult::Terminal(t) => NodeResult::Terminal(
-                GuardedTerminal::NormalTermination(t)
+                Result::Ok(t)
             )
         }
     }
@@ -201,8 +199,6 @@ pub struct PostResetNode<N, P> where
     _exists_tuple: PhantomData<P>
 }
 
-
-
 impl<N, P> PostResetNode<N, P> where 
     N: BehaviorTreeNode + Default,
     P: PostResetControl<Input=N::Input, Nonterminal=N::Nonterminal, 
@@ -277,7 +273,7 @@ impl <N, P> BehaviorTreeNode for PostResetNode<N, P> where
 #[cfg(test)]
 mod tests {
     use stackbt_automata_impl::ref_state_machine::ReferenceTransition;
-    use base_nodes::{WaitCondition, LeafNode, PredicateWait};
+    use base_nodes::{WaitCondition, PredicateWait};
     use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
     use control_wrappers::{NodeGuard, StepControl, StepDecision, PostResetControl};
 
@@ -300,14 +296,15 @@ mod tests {
 
     impl NodeGuard for MagGuard {
         type Input = i64;
-        fn test(input: &i64) -> bool {
+        type Nonterminal = i64;
+        fn test(input: &i64, _whocares: &i64) -> bool {
             *input > 5
         }
     }
 
     #[test]
     fn guarded_node_test() {
-        use control_wrappers::{GuardedNode, GuardedTerminal};
+        use control_wrappers::{GuardedNode, GuardFailure};
         let base_node = PredicateWait::with(Echoer);
         let wrapped_node = GuardedNode::with(MagGuard, base_node);
         let wrapped_node_1 = match wrapped_node.step(&7) {
@@ -321,12 +318,10 @@ mod tests {
             NodeResult::Nonterminal(_, _) => unreachable!("Expected terminal state"),
             NodeResult::Terminal(x) => {
                 match x {
-                    GuardedTerminal::GuardFailure(x) => {
+                    Result::Err(GuardFailure(x)) => {
                         assert_eq!(x, 4)
                     },
-                    GuardedTerminal::NormalTermination(_) => {
-                        unreachable!("Expected guard failure")
-                    }
+                    Result::Ok(_) => unreachable!("Expected guard failure")
                 }
             }
         };
@@ -452,7 +447,7 @@ mod tests {
         type Nonterminal = i64;
         type Terminal = ();
 
-        fn do_reset(input: &i64, output: Statepoint<&i64, &()>) -> bool {
+        fn do_reset(input: &i64, _output: Statepoint<&i64, &()>) -> bool {
             *input == -5 || *input == 5
         }
     }

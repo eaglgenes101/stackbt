@@ -106,36 +106,36 @@ impl<F> BehaviorTreeNode for Evaluation<F> where
     }
 }
 
-pub struct LeafNode<'k, M, N, T> where 
-    M: Automaton<'k, Action=Statepoint<N, T>> + 'k
+pub struct LeafNode<M, N, T> where 
+    M: Automaton<'static, Action=Statepoint<N, T>> + 'static
 {
     machine: M,
-    _m_bound: PhantomData<&'k M>,
+    _m_bound: PhantomData<&'static M>,
     _exists_tuple: PhantomData<(N, T)>,
 }
 
-impl<'k, M, N, T> LeafNode<'k, M, N, T> where 
-    M: Automaton<'k, Action=Statepoint<N, T>> + 'k
+impl<M, N, T> LeafNode<M, N, T> where 
+    M: Automaton<'static, Action=Statepoint<N, T>> + 'static
 {
-    pub fn new(machine: M) -> LeafNode<'k, M, N, T> {
+    pub fn new(machine: M) -> LeafNode<M, N, T> {
         LeafNode { 
-            machine: machine,
+            machine,
             _m_bound: PhantomData,
             _exists_tuple: PhantomData
         }
     }
 }
 
-impl<'k, M, N, T> Default for LeafNode<'k, M, N, T> where 
-    M: Automaton<'k, Action=Statepoint<N, T>> + Default + 'k
+impl<M, N, T> Default for LeafNode<M, N, T> where 
+    M: Automaton<'static, Action=Statepoint<N, T>> + Default + 'static
 {
-    fn default() -> LeafNode<'k, M, N, T> {
+    fn default() -> LeafNode<M, N, T> {
         LeafNode::new(M::default())
     }
 }
 
-impl<'k, M, N, T> BehaviorTreeNode for LeafNode<'k, M, N, T> where 
-    M: Automaton<'k, Action=Statepoint<N, T>> + 'k
+impl<M, N, T> BehaviorTreeNode for LeafNode<M, N, T> where 
+    M: Automaton<'static, Action=Statepoint<N, T>> + 'static
 {
     type Input = M::Input;
     type Nonterminal = N;

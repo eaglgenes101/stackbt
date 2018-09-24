@@ -21,14 +21,14 @@ impl<N, M> InputMappedNode<N, M> where
 {
     pub fn new(node: N) -> InputMappedNode<N, M> {
         InputMappedNode {
-            node: node,
+            node,
             _exists_tuple: PhantomData
         }
     }
 
     pub fn with(_type_helper: M, node: N) -> InputMappedNode<N, M> {
         InputMappedNode {
-            node: node,
+            node,
             _exists_tuple: PhantomData
         }
     }
@@ -85,14 +85,14 @@ impl<N, M> OutputMappedNode<N, M> where
 {
     pub fn new(node: N) -> OutputMappedNode<N, M> {
         OutputMappedNode {
-            node: node,
+            node,
             _exists_tuple: PhantomData
         }
     }
 
     pub fn with(_type_helper: M, node: N) -> OutputMappedNode<N, M> {
         OutputMappedNode {
-            node: node,
+            node,
             _exists_tuple: PhantomData
         }
     }
@@ -373,7 +373,7 @@ mod tests {
 
     impl LazyConstructor for LazyWrapper 
     {
-        type Creates = LeafNode<'static, InternalStateMachine<'static,
+        type Creates = LeafNode<InternalStateMachine<'static,
             IndefinitePlayback>, i64, i64>;
 
         fn create(input: &i64) -> Self::Creates {
@@ -414,7 +414,7 @@ mod tests {
 
     impl CustomConstructor for FixedWrapper 
     {
-        type Creates = LeafNode<'static, InternalStateMachine<'static,
+        type Creates = LeafNode<InternalStateMachine<'static,
             IndefinitePlayback>, i64, i64>;
         fn create() -> Self::Creates {
             LeafNode::new(InternalStateMachine::with(IndefinitePlayback, 12))

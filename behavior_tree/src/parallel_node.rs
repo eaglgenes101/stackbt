@@ -44,14 +44,14 @@ impl<C, D> ParallelBranchNode<C, D> where
     D: ParallelDecider<Input=C::Input, Nonterm=C::Nonterminal, 
         Term=C::Terminal>
 {
-    fn new() -> ParallelBranchNode<C, D> {
+    pub fn new() -> ParallelBranchNode<C, D> {
         ParallelBranchNode {
             collection: C::default(),
             _exists_tuple: PhantomData
         }
     }
 
-    fn from_existing(existing: C) -> ParallelBranchNode<C, D> {
+    pub fn from_existing(existing: C) -> ParallelBranchNode<C, D> {
         ParallelBranchNode {
             collection: existing,
             _exists_tuple: PhantomData
@@ -80,7 +80,7 @@ impl<C, D> BehaviorTreeNode for ParallelBranchNode<C, D> where
 
     fn step(self, input: &C::Input) -> NodeResult<Self::Nonterminal, D::Exit, Self> {
         let mut coll = self.collection;
-        let mut results = coll.run_all(input);
+        let results = coll.run_all(input);
         let decision = D::each_step(input, results);
         match decision {
             ParallelDecision::Stay(r) => NodeResult::Nonterminal(
@@ -124,9 +124,9 @@ mod tests {
 
     #[derive(Default)]
     struct MultiMachine {
-        first: NodeRunner<LeafNode<'static, InternalStateMachine<'static, 
+        first: NodeRunner<LeafNode<InternalStateMachine<'static, 
             IndefiniteIncrement>, i64, i64>>,
-        second: NodeRunner<LeafNode<'static, InternalStateMachine<'static, 
+        second: NodeRunner<LeafNode<InternalStateMachine<'static, 
             IndefiniteIncrement>, i64, i64>>,
     }
 

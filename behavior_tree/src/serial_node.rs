@@ -1,16 +1,20 @@
 use behavior_tree_node::{BehaviorTreeNode, NodeResult};
 use std::marker::PhantomData;
 
+pub trait Enumerable: Copy + Sized {
+    fn zero() -> Self;
+    fn successor(self) -> Option<Self>;
+}
+
 /// Trait for an enumeration of nodes, all of which have the same input, 
 /// nonterminals, and terminals. Each variant corresponds to a different 
 /// value of Enumeration. 
 pub trait EnumNode: BehaviorTreeNode {
-
     /// The type used to enumerate the variants of implementations of this 
     /// trait. std::mem::Discriminant works for comparing variants of an enum, 
     /// but not for enumerating or matching against them, hence this 
     /// associated type. 
-    type Discriminant: Default + Copy + IntoIterator<Item=Self::Discriminant>;
+    type Discriminant: Enumerable;
 
     fn new(Self::Discriminant) -> Self;
     fn discriminant(&self) -> Self::Discriminant;
@@ -18,16 +22,16 @@ pub trait EnumNode: BehaviorTreeNode {
 
 /// Enumeration of the possible decisions when the child node reaches a 
 /// nonterminal state. 
-pub enum NontermDecision<T, X> {
-    Step,
-    Trans(T),
+pub enum NontermDecision<E, T, X> {
+    Step(T),
+    Trans(E, T),
     Exit(X)
 }
 
 /// Enumeration of the possible decisions when the child node reaches a 
 /// terminal state. 
-pub enum TermDecision<T, X> {
-    Trans(T),
+pub enum TermDecision<E, T, X> {
+    Trans(E, T),
     Exit(X)
 }
 
@@ -43,8 +47,10 @@ pub trait SerialDecider {
     type Nonterm;
     type Term;
     type Exit;
-    fn on_nonterminal(Self::Enum, &Self::Nonterm) -> NontermDecision<Self::Enum, Self::Exit>;
-    fn on_terminal(Self::Enum, &Self::Term) -> TermDecision<Self::Enum, Self::Exit>;
+    fn on_nonterminal(Self::Enum, Self::Nonterm) -> NontermDecision<Self::Enum, 
+        Self::Nonterm, Self::Exit>;
+    fn on_terminal(Self::Enum, Self::Term) -> TermDecision<Self::Enum, 
+        Self::Term, Self::Exit>;
 }
 
 pub struct SerialBranchNode<E, D, X> where
@@ -61,14 +67,14 @@ impl<E, D, X> SerialBranchNode<E, D, X> where
     D: SerialDecider<Enum=E::Discriminant, Nonterm=E::Nonterminal, 
         Term=E::Terminal, Exit=X>
 {
-    fn new(variant: E::Discriminant) -> SerialBranchNode<E, D, X> {
+    pub fn new(variant: E::Discriminant) -> SerialBranchNode<E, D, X> {
         SerialBranchNode {
             node: E::new(variant),
             _exists_tuple: PhantomData
         }
     }
 
-    fn from_existing(existing: E) -> SerialBranchNode<E, D, X> {
+    pub fn from_existing(existing: E) -> SerialBranchNode<E, D, X> {
         SerialBranchNode {
             node: existing,
             _exists_tuple: PhantomData
@@ -78,12 +84,11 @@ impl<E, D, X> SerialBranchNode<E, D, X> where
 
 impl<E, D, X> Default for SerialBranchNode<E, D, X> where 
     E: EnumNode,
-    E::Discriminant: Default, 
     D: SerialDecider<Enum=E::Discriminant, Nonterm=E::Nonterminal, 
         Term=E::Terminal, Exit=X>
 {
     fn default() -> SerialBranchNode<E, D, X> {
-        SerialBranchNode::new(E::Discriminant::default())
+        SerialBranchNode::new(E::Discriminant::zero())
     }
 }
 
@@ -100,22 +105,22 @@ impl<E, D, X> BehaviorTreeNode for SerialBranchNode<E, D, X> where
         let discriminant = self.node.discriminant();
         match self.node.step(input) {
             NodeResult::Nonterminal(i, n) => {
-                match D::on_nonterminal(discriminant, &i) {
-                    NontermDecision::Step => NodeResult::Nonterminal(
-                        NontermReturn::Nonterminal(discriminant, i),
+                match D::on_nonterminal(discriminant, i) {
+                    NontermDecision::Step(j) => NodeResult::Nonterminal(
+                        NontermReturn::Nonterminal(discriminant, j),
                         Self::from_existing(n)
                     ),
-                    NontermDecision::Trans(e) => NodeResult::Nonterminal(
-                        NontermReturn::Nonterminal(discriminant, i),
+                    NontermDecision::Trans(e, j) => NodeResult::Nonterminal(
+                        NontermReturn::Nonterminal(discriminant, j),
                         Self::new(e)
                     ),
                     NontermDecision::Exit(x) => NodeResult::Terminal(x)
                 }
             },
             NodeResult::Terminal(i) => {
-                match D::on_terminal(discriminant, &i) {
-                    TermDecision::Trans(e) => NodeResult::Nonterminal(
-                        NontermReturn::Terminal(discriminant, i),
+                match D::on_terminal(discriminant, i) {
+                    TermDecision::Trans(e, j) => NodeResult::Nonterminal(
+                        NontermReturn::Terminal(discriminant, j),
                         Self::new(e)
                     ),
                     TermDecision::Exit(x) => NodeResult::Terminal(x)
@@ -129,7 +134,7 @@ impl<E, D, X> BehaviorTreeNode for SerialBranchNode<E, D, X> where
 mod tests {
     use base_nodes::{PredicateWait, WaitCondition};
     use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
-    use serial_node::{EnumNode, SerialDecider, NontermDecision, TermDecision};
+    use serial_node::{Enumerable, EnumNode, SerialDecider, NontermDecision, TermDecision};
 
     #[derive(Copy, Clone)]
     enum PosNegEnum {
@@ -137,40 +142,15 @@ mod tests {
         Negative
     }
 
-    impl Default for PosNegEnum {
-        fn default() -> PosNegEnum {
+    impl Enumerable for PosNegEnum {
+        fn zero() -> Self {
             PosNegEnum::Positive
         }
-    }
 
-    struct PosNegEnumIterator {
-        f: Option<PosNegEnum>
-    }
-
-    impl Iterator for PosNegEnumIterator {
-        type Item = PosNegEnum;
-        fn next(&mut self) -> Option<PosNegEnum> {
-            match self.f {
-                Option::Some(PosNegEnum::Positive) => {
-                    self.f = Option::Some(PosNegEnum::Negative);
-                    Option::Some(PosNegEnum::Positive)
-                },
-                Option::Some(PosNegEnum::Negative) => {
-                    self.f = Option::None;
-                    Option::Some(PosNegEnum::Negative)
-                },
-                Option::None => Option::None
-            }
-        }
-    }
-
-    impl IntoIterator for PosNegEnum {
-        type Item = PosNegEnum;
-        type IntoIter = PosNegEnumIterator;
-
-        fn into_iter(self) -> PosNegEnumIterator {
-            PosNegEnumIterator {
-                f: Option::Some(self)
+        fn successor(self) -> Option<Self> {
+            match self {
+                PosNegEnum::Positive => Option::Some(PosNegEnum::Negative),
+                PosNegEnum::Negative => Option::None
             }
         }
     }
@@ -273,14 +253,15 @@ mod tests {
         type Nonterm = i64;
         type Term = i64;
         type Exit = ();
-        fn on_nonterminal(_s: PosNegEnum, _o: &i64) -> NontermDecision<PosNegEnum, ()> {
-            NontermDecision::Step
+        
+        fn on_nonterminal(_s: PosNegEnum, o: i64) -> NontermDecision<PosNegEnum, i64, ()> {
+            NontermDecision::Step(o)
         }
 
-        fn on_terminal(state: PosNegEnum, _o: &i64) -> TermDecision<PosNegEnum, ()> {
+        fn on_terminal(state: PosNegEnum, o: i64) -> TermDecision<PosNegEnum, i64, ()> {
             match state {
-                PosNegEnum::Positive => TermDecision::Trans(PosNegEnum::Negative),
-                PosNegEnum::Negative => TermDecision::Trans(PosNegEnum::Positive)
+                PosNegEnum::Positive => TermDecision::Trans(PosNegEnum::Negative, o),
+                PosNegEnum::Negative => TermDecision::Trans(PosNegEnum::Positive, o)
             }
         }
     }
