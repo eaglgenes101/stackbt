@@ -7,10 +7,13 @@ authors = ["eaglgenes101 <eaglgenes101@gmail.com>"]
 stackbt_automata_impl = { path = "../automata_impl" }
 
 [features]
-default = ["nightly"]
+default = []
 
-# Enable nightly-only trait impls
-nightly = ["try_trait"]
+# Enable all nightly-dependent features
+nightly = ["try_trait", "unsized_locals"]
 
 # Enable support for the Try trait
 try_trait = []
+
+# Enable support for unsized locals
+unsized_locals = []

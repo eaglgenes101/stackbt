@@ -60,6 +60,9 @@ impl<E, N, T> SerialDecider for SerialSelector<E, N, T> where
     }
 }
 
+/// Runs nodes in parallel until at some point, they all terminate or 
+/// enter a trap state indicated by returning a statepoint terminal 
+/// as the nonterminal. 
 pub struct ParallelRunner<I, N, R, T> {
     _who_cares: PhantomData<(I, N, R, T)>
 }
@@ -99,6 +102,8 @@ impl<I, N, R, T> ParallelDecider for ParallelRunner<I, N, R, T> where
     }
 }
 
+/// Runs nodes until one terminates, resolving to a tuple of the terminating
+/// index and its terminal state when it does. 
 pub struct ParallelRacer<I, N, T>  {
     _who_cares: PhantomData<(I, N, T)>
 }
@@ -197,9 +202,7 @@ mod tests {
         type Nonterminal = i64;
         type Terminal = i64;
 
-        fn step(self, input: &i64) -> NodeResult<i64, i64, Self> where 
-            Self: Sized 
-        {
+        fn step(self, input: &i64) -> NodeResult<i64, i64, Self> {
             match self {
                 MultiMachine::First(n) => {
                     match n.step(input) {
@@ -343,9 +346,7 @@ mod tests {
         type Nonterminal = i64;
         type Terminal = Option<i64>;
 
-        fn step(self, input: &i64) -> NodeResult<i64, Option<i64>, Self> where 
-            Self: Sized 
-        {
+        fn step(self, input: &i64) -> NodeResult<i64, Option<i64>, Self> {
             match self {
                 WrappedMachine::First(n) => {
                     match n.step(input) {

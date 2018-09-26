@@ -1,12 +1,15 @@
 use behavior_tree_node::{BehaviorTreeNode, NodeResult};
 use std::marker::PhantomData;
 
+/// Mapping between different input types. 
 pub trait InputNodeMap {
     type In;
     type Out;
     fn input_transform(&Self::In) -> Self::Out;
 }
 
+/// Wrapper for a node which converts between the provided input type and 
+/// the input type expected by the node. 
 pub struct InputMappedNode<N, M> where 
     N: BehaviorTreeNode,
     M: InputNodeMap<Out=N::Input> 
@@ -63,6 +66,7 @@ impl<N, M> BehaviorTreeNode for InputMappedNode<N, M> where
     }
 }
 
+/// Mapping between different output types. 
 pub trait OutputNodeMap {
     type NontermIn;
     type NontermOut;
@@ -72,6 +76,8 @@ pub trait OutputNodeMap {
     fn terminal_transform(Self::TermIn) -> Self::TermOut;
 }
 
+/// Wrapper for a node which converts between the statepoints emitted by the 
+/// node and the ones exposed by the wrapper. 
 pub struct OutputMappedNode<N, M> where
     N: BehaviorTreeNode,
     M: OutputNodeMap<NontermIn = N::Nonterminal, TermIn = N::Terminal>
@@ -130,11 +136,15 @@ impl<N, M> BehaviorTreeNode for OutputMappedNode<N, M> where
     }
 }
 
+/// Lazy constructor for a node, depending on the first input. 
 pub trait LazyConstructor {
     type Creates: BehaviorTreeNode;
     fn create(&<Self::Creates as BehaviorTreeNode>::Input) -> Self::Creates;
 }
 
+/// Wrapper for for a node, which defers initialization until the first input 
+/// is supplied, after which the node is constructed using this input as a 
+/// parameter. 
 pub struct LazyConstructedNode<N, M> where
     N: BehaviorTreeNode,
     M: LazyConstructor<Creates=N>
@@ -202,12 +212,14 @@ impl<N, M> BehaviorTreeNode for LazyConstructedNode<N, M> where
     }
 }
 
-
+/// Eager constructor for a node. 
 pub trait CustomConstructor {
     type Creates: BehaviorTreeNode;
     fn create() -> Self::Creates;
 }
 
+/// Wrapper for a node which designates a default constructor for that node, 
+/// constructing it from the constructor. 
 pub struct CustomConstructedNode<N, M> where
     N: BehaviorTreeNode,
     M: CustomConstructor<Creates=N>

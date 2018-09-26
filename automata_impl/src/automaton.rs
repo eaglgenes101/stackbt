@@ -23,6 +23,7 @@ pub trait Automaton<'k> {
     }
 
     #[cfg(not(feature = "unsized_locals"))]
+    /// Turn a automaton value into an FnMut. 
     fn into_fnmut(self) -> Box<FnMut(&Self::Input) -> Self::Action + 'k> where 
         Self: Sized + 'k
     {
@@ -33,6 +34,7 @@ pub trait Automaton<'k> {
     }
 
     #[cfg(feature = "unsized_locals")]
+    /// Turn a automaton value into an FnMut. 
     fn into_fnmut(self) -> Box<FnMut(&Self::Input) -> Self::Action + 'k> where 
         Self: 'k
     {
@@ -42,7 +44,7 @@ pub trait Automaton<'k> {
         })
     }
 
-    /// Turn the automaton into an fnmut. 
+    /// Turn the boxed automaton into an fnmut. 
     fn boxed_into_fnmut(self: Box<Self>) -> Box<FnMut(&Self::Input) -> 
         Self::Action + 'k> where 
         Self: 'k

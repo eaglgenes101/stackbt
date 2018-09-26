@@ -1,16 +1,17 @@
 use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
 use std::marker::PhantomData;
 
-pub struct GuardFailure<N>(N); 
+pub struct GuardFailure<N>(pub N); 
 
+/// A node guard predicate. 
 pub trait NodeGuard {
     type Input;
     type Nonterminal;
     fn test(&Self::Input, &Self::Nonterminal) -> bool;
 }
 
-/// Guarded node, which executes the node it guards only as long as a guard 
-/// condition holds. 
+/// Guard wrapper for a node, which, if the guard condition fails, causes an 
+/// abnormal exit of the node. 
 pub struct GuardedNode<N, G> where
     N: BehaviorTreeNode,
     G: NodeGuard<Input=N::Input, Nonterminal=N::Nonterminal>
@@ -74,6 +75,11 @@ impl<N, G> BehaviorTreeNode for GuardedNode<N, G> where
     }
 }
 
+/// Enumeration of the possible decisions of a StepControl controller: 
+///   - Pause means to not step the machine. 
+///   - Play means to step the machine as normal. 
+///   - Reset means to reset the machine instead of stepping it. 
+///   - ResetPlay means to reset the machine and then subsequently step it. 
 pub enum StepDecision {
     Pause, 
     Play, 
@@ -81,16 +87,20 @@ pub enum StepDecision {
     ResetPlay
 }
 
+/// Step controller for a node. 
 pub trait StepControl {
     type Input;
     fn controlled_step(&Self::Input) -> StepDecision;
 }
 
+/// Nonterminal enum for a step-controlled node. 
 pub enum StepCtrlNonterm<I> {
     Stepped(I),
     Paused
 }
 
+/// A step-controlling wrapper for a node, which may pause, step, and/or 
+/// reset a node depending on inputs, before the node goes forward. 
 pub struct StepControlledNode<N, S> where 
     N: BehaviorTreeNode + Default,
     S: StepControl<Input=N::Input>
@@ -173,17 +183,18 @@ impl<N, S> BehaviorTreeNode for StepControlledNode<N, S> where
     }
 }
 
-pub enum ResetDecision<N> {
-    NoReset(N),
-    Reset(N)
-}
-
+/// Enumeration of the possible nonterminals of a post-reset node. 
+///   - NoReset: This node was not reset. 
+///   - ManualReset: This node was reset from a nonterminal state. 
+///   - EndReset: This node was reset from a terminal state. 
 pub enum PostResetNonterm<N, T> {
     NoReset(N),
     ManualReset(N),
     EndReset(T)
 }
 
+/// A post-resetting wrapper for a node, which after a node plays, may 
+/// or may not reset that node. 
 pub trait PostResetControl {
     type Input;
     type Nonterminal;

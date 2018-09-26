@@ -80,9 +80,15 @@ pub trait BehaviorTreeNode {
     type Input;
     type Nonterminal;
     type Terminal;
+
+    #[cfg(not(feature = "unsized_locals"))]
     fn step(self, input: &Self::Input) -> 
         NodeResult<Self::Nonterminal, Self::Terminal, Self> where 
         Self: Sized;
+
+    #[cfg(feature = "unsized_locals")]
+    fn step(self, input: &Self::Input) -> 
+        NodeResult<Self::Nonterminal, Self::Terminal, Self>;
 }
 
 

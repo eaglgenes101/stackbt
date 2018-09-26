@@ -2,15 +2,21 @@ use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
 use std::marker::PhantomData;
 use stackbt_automata_impl::automaton::Automaton;
 
+/// Parallel decider, which given the input and a slice of statepoints, 
+/// decides whether to forward the statepoint box or to consume the 
+/// statepoint box and exit. 
 pub trait ParallelDecider {
     type Input: 'static;
     type Nonterm: 'static;
     type Term: 'static;
     type Exit;
+    
     fn each_step(&Self::Input, Box<[Statepoint<Self::Nonterm, Self::Term>]>) -> 
         Statepoint<Box<[Statepoint<Self::Nonterm, Self::Term>]>, Self::Exit>;
 }
 
+/// Parallel branch node, which is composed of a ParallelDecider on top of 
+/// an automaton which returns boxed slices of statepoints. 
 pub struct ParallelBranchNode<C, D> where
     C: Automaton<'static, Input=D::Input, Action=Box<[Statepoint<D::Nonterm, 
         D::Term>]>>,
@@ -76,7 +82,6 @@ impl<C, D> BehaviorTreeNode for ParallelBranchNode<C, D> where
 
 #[cfg(test)]
 mod tests {
-    
     use base_nodes::MachineWrapper;
     use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
     use node_runner::NodeRunner;

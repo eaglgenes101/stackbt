@@ -17,7 +17,10 @@ pub trait EnumNode: BehaviorTreeNode {
     /// associated type. 
     type Discriminant: Enumerable;
 
+    /// Initialize a new node with discriminant with the given discriminant. 
     fn new(Self::Discriminant) -> Self;
+
+    /// Determine the discriminant of an enumerated node. 
     fn discriminant(&self) -> Self::Discriminant;
 }
 
@@ -199,9 +202,7 @@ mod tests {
         type Nonterminal = i64;
         type Terminal = i64;
 
-        fn step(self, input: &i64) -> NodeResult<i64, i64, Self> where 
-            Self: Sized 
-        {
+        fn step(self, input: &i64) -> NodeResult<i64, i64, Self> {
             match self {
                 MultiMachine::Positive(n) => {
                     match n.step(input) {

@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "try_trait", feature(try_trait))]
+#![cfg_attr(feature = "unsized_locals", feature(unsized_locals))]
 
 extern crate stackbt_automata_impl;
 

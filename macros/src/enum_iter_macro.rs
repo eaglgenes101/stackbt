@@ -196,6 +196,17 @@ macro_rules! enum_iter_main {
     };
 }
 
+/// Declarative macro for quickly and easily declaring an enum with an 
+/// associated exhaustively enumerable discriminant type. 
+/// 
+/// The name for both the new fielded enum and its associated discriminant 
+/// enumerator type must be legal, unused enum names, and its variants must 
+/// all be valid enum variant names. 
+/// 
+/// From this, the macro will expand to the definition of two enums, the first
+/// which is the enum to be made enumerable, and the second one, which is 
+/// defined to be a fieldless enum with the same discriminant names and a 
+/// trait impl which allows for it to be exhaustively enumerated. 
 #[macro_export]
 macro_rules! enum_iter {
     (
