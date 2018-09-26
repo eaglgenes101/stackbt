@@ -6,11 +6,16 @@ use stackbt_automata_impl::automaton::Automaton;
 /// decides whether to forward the statepoint box or to consume the 
 /// statepoint box and exit. 
 pub trait ParallelDecider {
+    /// Type of the input to distribute among the parallel nodes. 
     type Input: 'static;
+    /// Type of the nonterminals returned by each of the parallel nodes. 
     type Nonterm: 'static;
+    ///  Type of the terminals returned by each of the parallel nodes. 
     type Term: 'static;
+    /// Type of the terminal returned by the parallel node itself. 
     type Exit;
-    
+    /// Given the input and the boxed statepoint slice, return a statepoint 
+    /// of either that boxed statepoint slice or a terminal value. 
     fn each_step(&Self::Input, Box<[Statepoint<Self::Nonterm, Self::Term>]>) -> 
         Statepoint<Box<[Statepoint<Self::Nonterm, Self::Term>]>, Self::Exit>;
 }
@@ -31,16 +36,10 @@ impl<C, D> ParallelBranchNode<C, D> where
         D::Term>]>>,
     D: ParallelDecider
 {
+    /// Create a new parallel branch node. 
     pub fn new(machine: C) -> ParallelBranchNode<C, D> {
         ParallelBranchNode {
             collection: machine,
-            _exists_tuple: PhantomData
-        }
-    }
-
-    pub fn from_existing(existing: C) -> ParallelBranchNode<C, D> {
-        ParallelBranchNode {
-            collection: existing,
             _exists_tuple: PhantomData
         }
     }
@@ -73,7 +72,7 @@ impl<C, D> BehaviorTreeNode for ParallelBranchNode<C, D> where
         match decision {
             Statepoint::Nonterminal(ret) => NodeResult::Nonterminal(
                 ret,
-                Self::from_existing(coll)
+                Self::new(coll)
             ),
             Statepoint::Terminal(t) => NodeResult::Terminal(t)
         }

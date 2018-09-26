@@ -5,7 +5,9 @@ use std::iter::Iterator;
 /// take input, process it, and return an action. Most of them also change 
 /// their internal state each transition. 
 pub trait Automaton<'k> {
+    /// The input type taken by the automaton. 
     type Input: 'k;
+    /// The action type returned by the automaton. 
     type Action;
 
     /// Take an input by reference, and change state and output an action 

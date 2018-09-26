@@ -18,7 +18,9 @@ use std::ops::Try;
 /// terminal, and to work with nonterminal or terminal states their children 
 /// have themselves chosen. 
 pub enum Statepoint<N, T> {
+    /// A nonterminal state. 
     Nonterminal(N),
+    /// A terminal state. 
     Terminal(T),
 }
 
@@ -50,7 +52,9 @@ impl<N, T> Try for Statepoint<N, T> {
 /// only the terminal decision point value is returned, with the node instance 
 /// dropped and never to return. 
 pub enum NodeResult<R, T, N> {
+    /// A nonterminal state, along with the node itself. 
     Nonterminal(R, N),
+    /// A terminal state. 
     Terminal(T)
 }
 
@@ -77,16 +81,25 @@ impl<R, T, N> Try for NodeResult<R, T, N> {
 
 /// The behavior tree node trait itself. 
 pub trait BehaviorTreeNode {
+    /// Type of the input to take. 
     type Input;
+    /// Type of the nonterminal statepoints returned. 
     type Nonterminal;
+    /// Type of the terminal statepoints returned. 
     type Terminal;
 
     #[cfg(not(feature = "unsized_locals"))]
+    /// Given the input, perform a single step of the behavior node, 
+    /// either returning itself along with a nonterminal state, or returning 
+    /// a terminal state. 
     fn step(self, input: &Self::Input) -> 
         NodeResult<Self::Nonterminal, Self::Terminal, Self> where 
         Self: Sized;
 
     #[cfg(feature = "unsized_locals")]
+    /// Given the input, perform a single step of the behavior node, 
+    /// either returning itself along with a nonterminal state, or returning 
+    /// a terminal state. 
     fn step(self, input: &Self::Input) -> 
         NodeResult<Self::Nonterminal, Self::Terminal, Self>;
 }

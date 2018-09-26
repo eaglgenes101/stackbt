@@ -1,23 +1,23 @@
 use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 
-/// Nonterminal pushdown transition. Push pushes a new state machine onto the 
-/// pushdown stack, Stay keeps the state machine as it is, and Pop removes the 
-/// uppermost state machine from the stack. State machines may change state in 
-/// addition to manipulating the stack. 
+/// Nonterminal pushdown transition for the pushdown automaton. 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum PushdownTransition<A, N> {
+    /// Push a new frame onto the pushdown stack. 
     Push(A, N),
+    /// Keep the frames on the stack as is. 
     Stay(A),
+    /// Remove the topmost frame from the stack. 
     Pop(A)
 }
 
-/// Terminal pushdown transition. Push pushes a new state machine onto the 
-/// pushdown stack, whilt Stay keeps the state machine as it is. State 
-/// machines may change state in addition to manipulating the stack.
+/// Terminal pushdown transition for the pushdown automaton. 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)] 
 pub enum TerminalTransition<A, N> {
+    /// Push a new frame onto the pushdown stack. 
     Push(A, N),
+    /// Keep the frames on the stack as is. 
     Stay(A)
 }
 
@@ -41,6 +41,7 @@ impl<'k, I, A, N, T> PushdownAutomaton<'k, I, A, N, T> where
     N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, N>> + 'k,
     T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, N>> + 'k,
 {
+    /// Create a new pushdown automaton. 
     pub fn new(terminal: T) -> PushdownAutomaton<'k, I, A, N, T> {
         PushdownAutomaton {
             bottom: Option::Some(terminal),
@@ -50,6 +51,8 @@ impl<'k, I, A, N, T> PushdownAutomaton<'k, I, A, N, T> where
         }
     }
 
+    /// Create a new pushdown automaton from an existing iterable collection 
+    /// of finite state machines. 
     pub fn from_iterable<K, S>(terminal: T, prepush: S)
     -> PushdownAutomaton<'k, I, A, N, T> where
         K: Iterator<Item = N>,
@@ -58,6 +61,8 @@ impl<'k, I, A, N, T> PushdownAutomaton<'k, I, A, N, T> where
         PushdownAutomaton::from_iter(terminal, prepush.into_iter())
     }
 
+    /// Create a new pushdown automaton from an iterator supplying finite 
+    /// state machines. 
     pub fn from_iter<K>(terminal: T, prepush: K) 
     -> PushdownAutomaton<'k, I, A, N, T> where 
         K: Iterator<Item = N>

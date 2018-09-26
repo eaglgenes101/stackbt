@@ -3,8 +3,14 @@ use std::marker::PhantomData;
 
 /// Mapping between different input types. 
 pub trait InputMachineMap {
+    /// The input type for the input mapper, which is taken as the input type 
+    /// of the wrapper. 
     type In;
+    /// The output type for the input mapper, which is then fed into the 
+    /// enclosed automaton. 
     type Out;
+    /// Map between the input supplied and the output to feed into the 
+    /// enclosed automaton. 
     fn input_transform(&Self::In) -> Self::Out;
 }
 
@@ -22,6 +28,7 @@ impl<'k, M, W> InputMappedMachine<'k, M, W> where
     M: Automaton<'k>,
     W: InputMachineMap<Out=M::Input>
 {
+    /// Create a new input mapped automaton. 
     pub fn new(machine: M) -> InputMappedMachine<'k, M, W> {
         InputMappedMachine {
             machine,
@@ -29,6 +36,8 @@ impl<'k, M, W> InputMappedMachine<'k, M, W> where
         }
     }
 
+    /// Create an new input mapped automaton, using a dummy object to supply
+    /// the type of the wrapper. 
     pub fn with(_type_helper: W, machine: M) -> InputMappedMachine<'k, M, W> {
         InputMappedMachine {
             machine,
@@ -66,8 +75,14 @@ impl<'k, M, W> FiniteStateAutomaton<'k> for InputMappedMachine<'k, M, W> where
 
 /// Mapping between different output types. 
 pub trait OutputMachineMap {
+    /// The input type for the output mapper, received from the enclosed 
+    /// automaton. 
     type In;
+    /// The output type for the output mapper, which is the type returned 
+    /// by the wrapper. 
     type Out;
+    /// Map between the input returned by the automaton and the output to
+    /// return. 
     fn output_transform(Self::In) -> Self::Out;
 }
 
@@ -85,6 +100,7 @@ impl<'k, M, W> OutputMappedMachine<'k, M, W> where
     M: Automaton<'k>,
     W: OutputMachineMap<In=M::Action>
 {
+    /// Create a new output mapped automaton. 
     pub fn new(machine: M) -> OutputMappedMachine<'k, M, W> {
         OutputMappedMachine {
             machine,
@@ -92,6 +108,8 @@ impl<'k, M, W> OutputMappedMachine<'k, M, W> where
         }
     }
 
+    /// Create an new output mapped automaton, using a dummy object to supply
+    /// the type of the wrapper. 
     pub fn with(_type_helper: W, machine: M) -> OutputMappedMachine<'k, M, W> {
         OutputMappedMachine {
             machine,
@@ -128,9 +146,11 @@ impl<'k, M, W> FiniteStateAutomaton<'k> for OutputMappedMachine<'k, M, W> where
 {}
 
 
-/// Lazy constructor for a machine, depending on the first input. 
+/// Lazy constructor for an automaton, depending on the first input. 
 pub trait LazyConstructor<'k> {
+    /// Type of the automaton to create. 
     type Creates: Automaton<'k>;
+    /// Create a new automaton. 
     fn create(&<Self::Creates as Automaton<'k>>::Input) -> Self::Creates;
 }
 
@@ -149,6 +169,7 @@ impl<'k, M, C> LazyConstructedMachine<'k, M, C> where
     M: Automaton<'k>,
     C: LazyConstructor<'k, Creates=M>
 {
+    /// Create an new lazily constructed automaton. 
     pub fn new() -> LazyConstructedMachine<'k, M, C> {
         LazyConstructedMachine{
             machine: Option::None,
@@ -156,6 +177,8 @@ impl<'k, M, C> LazyConstructedMachine<'k, M, C> where
         }
     }
 
+    /// Create an new lazily constructed automaton, using a dummy object to 
+    /// supply the type of the wrapper. 
     pub fn with(_type_assist: C) -> LazyConstructedMachine<'k, M, C> {
         LazyConstructedMachine{
             machine: Option::None,
@@ -163,6 +186,8 @@ impl<'k, M, C> LazyConstructedMachine<'k, M, C> where
         }
     }
 
+    /// Wrap an existing automaton in the lazily constructed automaton 
+    /// wrapper.
     pub fn from_existing(machine: M) -> LazyConstructedMachine<'k, M, C> {
         LazyConstructedMachine {
             machine: Option::Some(machine),
@@ -213,7 +238,9 @@ impl<'k, M, C> FiniteStateAutomaton<'k> for LazyConstructedMachine<'k, M, C> whe
 
 /// Eager constructor for an automaton. 
 pub trait CustomConstructor<'k> {
+    /// Type of the automaton to create. 
     type Creates: Automaton<'k>;
+    /// Create a new automaton. 
     fn create() -> Self::Creates;
 }
 
@@ -231,6 +258,7 @@ impl<'k, M, C> CustomConstructedMachine<'k, M, C> where
     M: Automaton<'k>,
     C: CustomConstructor<'k, Creates=M>
 {
+    /// Create an new custom constructed automaton. 
     pub fn new() -> CustomConstructedMachine<'k, M, C> {
         CustomConstructedMachine {
             machine: C::create(),
@@ -238,16 +266,20 @@ impl<'k, M, C> CustomConstructedMachine<'k, M, C> where
         }
     }
 
-    pub fn from_existing(machine: M) -> CustomConstructedMachine<'k, M, C> {
+    /// Create an new custom constructed automaton, using a dummy object to 
+    /// supply the type of the wrapper. 
+    pub fn with(_type_assist: C) -> CustomConstructedMachine<'k, M, C> {
         CustomConstructedMachine {
-            machine: machine,
+            machine: C::create(),
             _exists_tuple: PhantomData
         }
     }
 
-    pub fn with(_type_assist: C) -> CustomConstructedMachine<'k, M, C> {
+    /// Wrap an existing automaton in the custom constructed automaton 
+    /// wrapper.
+    pub fn from_existing(machine: M) -> CustomConstructedMachine<'k, M, C> {
         CustomConstructedMachine {
-            machine: C::create(),
+            machine: machine,
             _exists_tuple: PhantomData
         }
     }

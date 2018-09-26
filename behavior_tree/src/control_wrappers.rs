@@ -5,8 +5,13 @@ pub struct GuardFailure<N>(pub N);
 
 /// A node guard predicate. 
 pub trait NodeGuard {
+    /// Type of the input to take. 
     type Input;
+    /// Type of the nonterminal to take. 
     type Nonterminal;
+    /// Given references to the input taken and the nonterminal returned, 
+    /// determine whether to keep running the node (true) or end its 
+    /// execution prematurely (false). 
     fn test(&Self::Input, &Self::Nonterminal) -> bool;
 }
 
@@ -24,6 +29,7 @@ impl<N, G> GuardedNode<N, G> where
     N: BehaviorTreeNode,
     G: NodeGuard<Input=N::Input, Nonterminal=N::Nonterminal>
 {
+    /// Create a new guarded node. 
     pub fn new(node: N) -> GuardedNode<N, G> {
         GuardedNode {
             node: node,
@@ -31,6 +37,8 @@ impl<N, G> GuardedNode<N, G> where
         }
     }
 
+    /// Create a new guarded node, using, using a dummy object to supply the 
+    /// type of the node guard. 
     pub fn with(_type_helper: G, node: N) -> GuardedNode<N, G> {
         GuardedNode {
             node: node,
@@ -75,27 +83,32 @@ impl<N, G> BehaviorTreeNode for GuardedNode<N, G> where
     }
 }
 
-/// Enumeration of the possible decisions of a StepControl controller: 
-///   - Pause means to not step the machine. 
-///   - Play means to step the machine as normal. 
-///   - Reset means to reset the machine instead of stepping it. 
-///   - ResetPlay means to reset the machine and then subsequently step it. 
+/// Enumeration of the possible decisions of a StepControl controller.
 pub enum StepDecision {
+    /// Don't step the machine. 
     Pause, 
+    /// Step the machine as normal. 
     Play, 
+    /// Dispose the current machine, and initialize a new one in its place. 
     Reset, 
+    /// Reset the machine, and then subsequently step it. 
     ResetPlay
 }
 
 /// Step controller for a node. 
 pub trait StepControl {
+    /// Type of the input to take. 
     type Input;
+    /// Given a reference to the input, determine whether to pause, play, 
+    /// and/or reset the enclosed node before it starts. 
     fn controlled_step(&Self::Input) -> StepDecision;
 }
 
 /// Nonterminal enum for a step-controlled node. 
 pub enum StepCtrlNonterm<I> {
+    /// The node was stepped as normal, perhaps after resetting it. 
     Stepped(I),
+    /// The node was paused, and maybe reset. 
     Paused
 }
 
@@ -113,6 +126,7 @@ impl<N, S> StepControlledNode<N, S> where
     N: BehaviorTreeNode + Default,
     S: StepControl<Input=N::Input>
 {
+    /// Create a new step controlled node. 
     pub fn new(node: N) -> StepControlledNode<N, S> {
         StepControlledNode {
             node: node,
@@ -120,6 +134,8 @@ impl<N, S> StepControlledNode<N, S> where
         }
     }
 
+    /// Create a new step controlled node, using, using a dummy object to 
+    /// supply the type of the step controller.  
     pub fn with(_type_assist: S, node: N) -> StepControlledNode<N, S> {
         StepControlledNode {
             node: node,
@@ -183,26 +199,33 @@ impl<N, S> BehaviorTreeNode for StepControlledNode<N, S> where
     }
 }
 
-/// Enumeration of the possible nonterminals of a post-reset node. 
-///   - NoReset: This node was not reset. 
-///   - ManualReset: This node was reset from a nonterminal state. 
-///   - EndReset: This node was reset from a terminal state. 
 pub enum PostResetNonterm<N, T> {
+    /// The node was not reset. 
     NoReset(N),
+    /// The node was reset from a nonterminal state. 
     ManualReset(N),
+    /// The node was reset from a terminal state. 
     EndReset(T)
 }
 
 /// A post-resetting wrapper for a node, which after a node plays, may 
 /// or may not reset that node. 
 pub trait PostResetControl {
+    /// Type of the input to take. 
     type Input;
+    /// Type of the nonterminal to take. 
     type Nonterminal;
+    /// Type of the terminal to take. 
     type Terminal;
+    /// Given a reference to the input and a statepoint corresponding to the 
+    /// enclosed node's state, return whether to reset it (true) or not 
+    /// (false) after it runs. 
     fn do_reset(&Self::Input, Statepoint<&Self::Nonterminal, 
         &Self::Terminal>) -> bool;
 }
 
+/// A post-run resetting wrapper for a node, which may reset a node after 
+/// it runs. 
 pub struct PostResetNode<N, P> where 
     N: BehaviorTreeNode + Default,
     P: PostResetControl<Input=N::Input, Nonterminal=N::Nonterminal, 
@@ -217,6 +240,7 @@ impl<N, P> PostResetNode<N, P> where
     P: PostResetControl<Input=N::Input, Nonterminal=N::Nonterminal, 
         Terminal=N::Terminal>
 {
+    /// Create a new step controlled node. 
     pub fn new(node: N) -> PostResetNode<N, P> {
         PostResetNode {
             node: node,
@@ -224,6 +248,8 @@ impl<N, P> PostResetNode<N, P> where
         }
     }
 
+    /// Create a new step controlled node, using a dummy object to supply the 
+    /// type of the reset controller. 
     pub fn with(_type_assist: P, node: N) -> PostResetNode<N, P> {
         PostResetNode {
             node: node,

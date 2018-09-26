@@ -3,8 +3,13 @@ use std::marker::PhantomData;
 
 /// Transition trait for RefStateMachine. 
 pub trait ReferenceTransition: Copy {
+    /// The input type taken by the state machine. 
     type Input;
+    /// The type of the internal state of the state machine. 
     type Action;
+    /// Given a reference to the input, consume self, returning the action to
+    /// return and the instance of Self used to reconstitute the 
+    /// RefStateMachine. 
     fn step(self, &Self::Input) -> (Self::Action, Self);
 }
 
@@ -22,6 +27,7 @@ pub struct RefStateMachine<'k, C> where
 impl <'k, C> RefStateMachine<'k, C> where 
     C: ReferenceTransition + 'k
 {
+    /// Create a new reference state machine. 
     pub fn new(init_state: C) -> RefStateMachine<'k, C> {
         RefStateMachine {
             current_state: Option::Some(init_state),

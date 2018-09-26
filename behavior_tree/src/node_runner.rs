@@ -13,6 +13,7 @@ pub struct NodeRunner<N> where
 impl<N> NodeRunner<N> where 
     N: BehaviorTreeNode + 'static
 {
+    /// Create a new node runner from a behavior tree node. 
     pub fn new(node: N) -> NodeRunner<N> {
         NodeRunner {
             node: Option::Some(node)

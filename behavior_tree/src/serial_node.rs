@@ -3,7 +3,9 @@ use std::marker::PhantomData;
 
 /// Trait for a type which is exhaustively enumerable. 
 pub trait Enumerable: Copy + Sized {
+    /// Get the first value of the enumerable. 
     fn zero() -> Self;
+    /// Get the subsequent values of the enumerable. 
     fn successor(self) -> Option<Self>;
 }
 
@@ -27,39 +29,56 @@ pub trait EnumNode: BehaviorTreeNode {
 /// Enumeration of the possible decisions when the child node reaches a 
 /// nonterminal state. 
 pub enum NontermDecision<E, T, X> {
+    /// Step the current subnode. 
     Step(T),
+    /// Transition from the current subnode to a new one. 
     Trans(E, T),
+    /// Exit the current supernode entirely. 
     Exit(X)
 }
 
 /// Enumeration of the possible decisions when the child node reaches a 
 /// terminal state. 
 pub enum TermDecision<E, T, X> {
+    /// Transition from the current subnode to a new one. 
     Trans(E, T),
+    /// Exit the current supernode entirely. 
     Exit(X)
 }
 
 /// Return type of the SerialBranchNode. 
 pub enum NontermReturn<E, N, T> {
+    /// Nonterminal of a subnode. 
     Nonterminal(E, N),
+    /// Terminal of a subnode. 
     Terminal(E, T)
 }
 
 /// Trait for the transition behavior of a SerialBranchNode. 
 pub trait SerialDecider {
+    /// Type enumerating the discriminants of the node enumeration. 
     type Enum;
+    /// Type of the inputs of the subnodes. 
+    type Input;
+    /// Type of the nonterminals of the subnodes. 
     type Nonterm;
+    /// Type of the terminals of the subnodes. 
     type Term;
+    /// Supernode terminal type. 
     type Exit;
-    fn on_nonterminal(Self::Enum, Self::Nonterm) -> NontermDecision<Self::Enum, 
-        Self::Nonterm, Self::Exit>;
-    fn on_terminal(Self::Enum, Self::Term) -> TermDecision<Self::Enum, 
-        Self::Term, Self::Exit>;
+    /// Given a reference to the input and the current nonterminal state, 
+    /// decide what to do from the nonterminal statepoint. 
+    fn on_nonterminal(&Self::Input, Self::Enum, Self::Nonterm) -> NontermDecision<
+        Self::Enum, Self::Nonterm, Self::Exit>;
+    /// Given a reference to the input and the current terminal state, decide 
+    /// what to do from the terminal statepoint. 
+    fn on_terminal(&Self::Input, Self::Enum, Self::Term) -> TermDecision<
+        Self::Enum, Self::Term, Self::Exit>;
 }
 
 pub struct SerialBranchNode<E, D, X> where
     E: EnumNode,
-    D: SerialDecider<Enum=E::Discriminant, Nonterm=E::Nonterminal, 
+    D: SerialDecider<Enum=E::Discriminant, Input=E::Input, Nonterm=E::Nonterminal, 
         Term=E::Terminal, Exit=X>
 {
     node: E,
@@ -68,9 +87,10 @@ pub struct SerialBranchNode<E, D, X> where
 
 impl<E, D, X> SerialBranchNode<E, D, X> where 
     E: EnumNode,
-    D: SerialDecider<Enum=E::Discriminant, Nonterm=E::Nonterminal, 
+    D: SerialDecider<Enum=E::Discriminant, Input=E::Input, Nonterm=E::Nonterminal, 
         Term=E::Terminal, Exit=X>
 {
+    /// Create a new serial branch node for the given discriminant. 
     pub fn new(variant: E::Discriminant) -> SerialBranchNode<E, D, X> {
         SerialBranchNode {
             node: E::new(variant),
@@ -78,6 +98,7 @@ impl<E, D, X> SerialBranchNode<E, D, X> where
         }
     }
 
+    /// Wrap an existing enumerated node in a serial branch node. 
     pub fn from_existing(existing: E) -> SerialBranchNode<E, D, X> {
         SerialBranchNode {
             node: existing,
@@ -88,7 +109,7 @@ impl<E, D, X> SerialBranchNode<E, D, X> where
 
 impl<E, D, X> Default for SerialBranchNode<E, D, X> where 
     E: EnumNode,
-    D: SerialDecider<Enum=E::Discriminant, Nonterm=E::Nonterminal, 
+    D: SerialDecider<Enum=E::Discriminant, Input=E::Input, Nonterm=E::Nonterminal, 
         Term=E::Terminal, Exit=X>
 {
     fn default() -> SerialBranchNode<E, D, X> {
@@ -98,7 +119,7 @@ impl<E, D, X> Default for SerialBranchNode<E, D, X> where
 
 impl<E, D, X> BehaviorTreeNode for SerialBranchNode<E, D, X> where
     E: EnumNode,
-    D: SerialDecider<Enum=E::Discriminant, Nonterm=E::Nonterminal, 
+    D: SerialDecider<Enum=E::Discriminant, Input=E::Input, Nonterm=E::Nonterminal, 
         Term=E::Terminal, Exit=X>
 {
     type Input = E::Input;
@@ -110,7 +131,7 @@ impl<E, D, X> BehaviorTreeNode for SerialBranchNode<E, D, X> where
         let discriminant = self.node.discriminant();
         match self.node.step(input) {
             NodeResult::Nonterminal(i, n) => {
-                match D::on_nonterminal(discriminant, i) {
+                match D::on_nonterminal(input, discriminant, i) {
                     NontermDecision::Step(j) => NodeResult::Nonterminal(
                         NontermReturn::Nonterminal(discriminant, j),
                         Self::from_existing(n)
@@ -123,7 +144,7 @@ impl<E, D, X> BehaviorTreeNode for SerialBranchNode<E, D, X> where
                 }
             },
             NodeResult::Terminal(i) => {
-                match D::on_terminal(discriminant, i) {
+                match D::on_terminal(input, discriminant, i) {
                     TermDecision::Trans(e, j) => NodeResult::Nonterminal(
                         NontermReturn::Terminal(discriminant, j),
                         Self::new(e)
@@ -253,15 +274,20 @@ mod tests {
 
     impl SerialDecider for Switcharound {
         type Enum = PosNegEnum;
+        type Input = i64;
         type Nonterm = i64;
         type Term = i64;
         type Exit = ();
         
-        fn on_nonterminal(_s: PosNegEnum, o: i64) -> NontermDecision<PosNegEnum, i64, ()> {
+        fn on_nonterminal(_i: &i64, _s: PosNegEnum, o: i64) -> NontermDecision<
+            PosNegEnum, i64, ()> 
+        {
             NontermDecision::Step(o)
         }
 
-        fn on_terminal(state: PosNegEnum, o: i64) -> TermDecision<PosNegEnum, i64, ()> {
+        fn on_terminal(_i: &i64, state: PosNegEnum, o: i64) -> TermDecision<
+            PosNegEnum, i64, ()> 
+        {
             match state {
                 PosNegEnum::Positive => TermDecision::Trans(PosNegEnum::Negative, o),
                 PosNegEnum::Negative => TermDecision::Trans(PosNegEnum::Positive, o)

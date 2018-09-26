@@ -5,23 +5,24 @@ use std::marker::PhantomData;
 
 /// Runs all nodes in sequence, one at a time, regardless of how they resolve 
 /// in the end. 
-pub struct SerialRunner<E, N, T> where E: Enumerable {
-    _who_cares: PhantomData<(E, N, T)>
+pub struct SerialRunner<E, I, N, T> where E: Enumerable {
+    _who_cares: PhantomData<(E, I, N, T)>
 }
 
-impl<E, N, T> SerialDecider for SerialRunner<E, N, T> where 
+impl<E, I, N, T> SerialDecider for SerialRunner<E, I, N, T> where 
     E: Enumerable
 {
     type Enum = E;
+    type Input = I;
     type Nonterm = N;
     type Term = T;
     type Exit = ();
 
-    fn on_nonterminal(_ordinal: E, statept: N) -> NontermDecision<E, N, ()> {
+    fn on_nonterminal(_input: &I, _ordinal: E, statept: N) -> NontermDecision<E, N, ()> {
         NontermDecision::Step(statept)
     }
 
-    fn on_terminal(ordinal: E, statept: T) -> TermDecision<E, T, ()> {
+    fn on_terminal(_input: &I, ordinal: E, statept: T) -> TermDecision<E, T, ()> {
         match ordinal.successor() {
             Option::Some(e) => {
                 TermDecision::Trans(e, statept)
@@ -33,23 +34,28 @@ impl<E, N, T> SerialDecider for SerialRunner<E, N, T> where
 
 /// Runs nodes in sequence until one resolves into an Option::Some, which 
 /// depending on context may be either success or failure. 
-pub struct SerialSelector<E, N, T> where E: Enumerable {
-    _who_cares: PhantomData<(E, N, T)>
+pub struct SerialSelector<E, I, N, T> where E: Enumerable {
+    _who_cares: PhantomData<(E, I, N, T)>
 }
 
-impl<E, N, T> SerialDecider for SerialSelector<E, N, T> where 
+impl<E, I, N, T> SerialDecider for SerialSelector<E, I, N, T> where 
     E: Enumerable
 {
     type Enum = E;
+    type Input = I;
     type Nonterm = N;
     type Term = Option<T>;
     type Exit = Option<(E, T)>;
 
-    fn on_nonterminal(_ord: E, statept: N) -> NontermDecision<E, N, Option<(E, T)>> {
+    fn on_nonterminal(_input: &I, _ord: E, statept: N) -> NontermDecision<E, N, 
+        Option<(E, T)>> 
+    {
         NontermDecision::Step(statept)
     }
 
-    fn on_terminal(ord: E, statept: Option<T>) -> TermDecision<E, Option<T>, Option<(E, T)>> {
+    fn on_terminal(_input: &I, ord: E, statept: Option<T>) -> TermDecision<E, Option<T>, 
+        Option<(E, T)>> 
+    {
         match statept {
             Option::Some(t) => TermDecision::Exit(Option::Some((ord, t))),
             Option::None => match ord.successor() {
@@ -253,7 +259,7 @@ mod tests {
     fn serial_runner_test() {
         use serial_node::{SerialBranchNode, NontermReturn};
         use node_compositions::SerialRunner;
-        let test_node = SerialBranchNode::<MultiMachine, SerialRunner<_, _, _>, ()>
+        let test_node = SerialBranchNode::<MultiMachine, SerialRunner<_, _, _, _>, ()>
             ::default();
         let test_node_1 = match test_node.step(&3) {
             NodeResult::Nonterminal(ret, n) => {
@@ -396,7 +402,7 @@ mod tests {
     fn serial_selector_test() {
         use serial_node::{SerialBranchNode, NontermReturn};
         use node_compositions::SerialSelector;
-        let test_node = SerialBranchNode::<WrappedMachine, SerialSelector< _, _, _>, 
+        let test_node = SerialBranchNode::<WrappedMachine, SerialSelector<_, _, _, _>, 
             Option<_>>::default();
         let test_node_1 = match test_node.step(&3) {
             NodeResult::Nonterminal(ret, n) => {

@@ -2,14 +2,6 @@
 members = [
     "automata_impl",
     "macros",
-    "behavior_tree"
+    "behavior_tree",
+    "stackbt"
 ]
-
-[features]
-default = []
-
-nightly = ["try_trait", "unsized_locals"]
-
-try_trait = []
-
-unsized_locals = []

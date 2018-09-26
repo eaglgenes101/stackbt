@@ -4,9 +4,14 @@ use stackbt_automata_impl::automaton::Automaton;
 
 /// Wait condition for a predicate wait node. 
 pub trait WaitCondition {
+    /// Type of the input to take. 
     type Input;
+    /// Type of the nonterminal statepoints to return. 
     type Nonterminal;
+    /// Type of the terminal statepoints to return. 
     type Terminal;
+    /// Given the input, determine whether to return a nonterminal state, or 
+    /// a terminal state. 
     fn do_end(&Self::Input) -> Statepoint<Self::Nonterminal, Self::Terminal>;
 }
 
@@ -21,12 +26,15 @@ pub struct PredicateWait<F> where
 impl<F> PredicateWait<F> where 
     F: WaitCondition
 {
+    /// Create a new predicate wait node. 
     pub fn new() -> PredicateWait<F> {
         PredicateWait {
             _who_cares: PhantomData
         }
     }
 
+    /// Create a new predicate wait node, using a dummy object to supply 
+    /// the type of the waiting predicate. 
     pub fn with(_type_helper: F) -> PredicateWait<F> {
         PredicateWait {
             _who_cares: PhantomData
@@ -60,8 +68,11 @@ impl<F> BehaviorTreeNode for PredicateWait<F> where
 
 /// Wrapper for a function call, intended for Evaluation. 
 pub trait CallWrapper {
+    /// Type of the input to take. 
     type Input;
+    /// Type of the output to return. 
     type Output;
+    /// Given the input, determine the value to immediately terminate with. 
     fn call(&Self::Input) -> Self::Output;
 }
 
@@ -76,12 +87,15 @@ pub struct Evaluation<F> where
 impl<F> Evaluation<F> where 
     F: CallWrapper
 {
+    /// Create a new evaluation node. 
     pub fn new() -> Evaluation<F> {
         Evaluation {
             _who_cares: PhantomData
         }
     }
 
+    /// Create a new evaluation node, using a dummy object to supply the type
+    /// of the function wrapper. 
     pub fn with(_type_helper: F) -> Evaluation<F> {
         Evaluation {
             _who_cares: PhantomData
@@ -122,6 +136,7 @@ pub struct MachineWrapper<M, N, T> where
 impl<M, N, T> MachineWrapper<M, N, T> where 
     M: Automaton<'static, Action=Statepoint<N, T>> + 'static
 {
+    /// Create a new machine wrapping node. 
     pub fn new(machine: M) -> MachineWrapper<M, N, T> {
         MachineWrapper { 
             machine,

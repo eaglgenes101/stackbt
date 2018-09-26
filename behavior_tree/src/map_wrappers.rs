@@ -3,8 +3,14 @@ use std::marker::PhantomData;
 
 /// Mapping between different input types. 
 pub trait InputNodeMap {
+    /// The input type for the input mapper, which is taken as the input type 
+    /// of the wrapper. 
     type In;
+    /// The output type for the input mapper, which is then fed into the 
+    /// enclosed behavior tree node. 
     type Out;
+    /// Map between the input supplied and the output to feed into the 
+    /// enclosed behavior tree node. 
     fn input_transform(&Self::In) -> Self::Out;
 }
 
@@ -22,6 +28,7 @@ impl<N, M> InputMappedNode<N, M> where
     N: BehaviorTreeNode,
     M: InputNodeMap<Out=N::Input>
 {
+    /// Create a new input mapped node. 
     pub fn new(node: N) -> InputMappedNode<N, M> {
         InputMappedNode {
             node,
@@ -29,6 +36,8 @@ impl<N, M> InputMappedNode<N, M> where
         }
     }
 
+    /// Create an new input mapped node, using a dummy object to supply the 
+    /// type of the wrapper. 
     pub fn with(_type_helper: M, node: N) -> InputMappedNode<N, M> {
         InputMappedNode {
             node,
@@ -68,11 +77,22 @@ impl<N, M> BehaviorTreeNode for InputMappedNode<N, M> where
 
 /// Mapping between different output types. 
 pub trait OutputNodeMap {
+    /// The nonterminal input type, received from the enclosed behavior tree 
+    /// node. 
     type NontermIn;
+    /// The nonterminal output type, which is the type returned by the 
+    /// wrapper. 
     type NontermOut;
+    /// The terminal input type, received from the enclosed behavior tree 
+    /// node. 
     type TermIn;
+    /// The terminal output type, which is the type returned by the wrapper. 
     type TermOut;
+    /// Map between the nonterminal input returned by the automaton and the 
+    /// nonterminal output to return. 
     fn nonterminal_transform(Self::NontermIn) -> Self::NontermOut;
+    /// Map between the terminal input returned by the automaton and the 
+    /// terminal output to return. 
     fn terminal_transform(Self::TermIn) -> Self::TermOut;
 }
 
@@ -90,6 +110,7 @@ impl<N, M> OutputMappedNode<N, M> where
     N: BehaviorTreeNode,
     M: OutputNodeMap<NontermIn = N::Nonterminal, TermIn = N::Terminal>
 {
+    /// Create an new output mapped node. 
     pub fn new(node: N) -> OutputMappedNode<N, M> {
         OutputMappedNode {
             node,
@@ -97,6 +118,8 @@ impl<N, M> OutputMappedNode<N, M> where
         }
     }
 
+    /// Create an new output mapped node, using a dummy object to supply the 
+    /// type of the wrapper. 
     pub fn with(_type_helper: M, node: N) -> OutputMappedNode<N, M> {
         OutputMappedNode {
             node,
@@ -138,7 +161,9 @@ impl<N, M> BehaviorTreeNode for OutputMappedNode<N, M> where
 
 /// Lazy constructor for a node, depending on the first input. 
 pub trait LazyConstructor {
+    /// Type of the behavior tree node to create. 
     type Creates: BehaviorTreeNode;
+    /// Create a new behavior tree node. 
     fn create(&<Self::Creates as BehaviorTreeNode>::Input) -> Self::Creates;
 }
 
@@ -157,6 +182,7 @@ impl<N, M> LazyConstructedNode<N, M> where
     N: BehaviorTreeNode,
     M: LazyConstructor<Creates=N>
 {
+    /// Create a new lazily constructed behavior tree node. 
     pub fn new() -> LazyConstructedNode<N, M> {
         LazyConstructedNode{
             node: Option::None,
@@ -164,6 +190,8 @@ impl<N, M> LazyConstructedNode<N, M> where
         }
     }
 
+    /// Create a new lazily constructed behavior tree node, using a dummy 
+    /// object to supply type of the constructor. 
     pub fn with(_type_assist: M) -> LazyConstructedNode<N, M> {
         LazyConstructedNode{
             node: Option::None,
@@ -171,6 +199,8 @@ impl<N, M> LazyConstructedNode<N, M> where
         }
     }
 
+    /// Wrap an existing behavior tree node in the lazily constructed node
+    /// wrapper.
     pub fn from_existing(node: N) -> LazyConstructedNode<N, M> {
         LazyConstructedNode {
             node: Option::Some(node),
@@ -214,7 +244,9 @@ impl<N, M> BehaviorTreeNode for LazyConstructedNode<N, M> where
 
 /// Eager constructor for a node. 
 pub trait CustomConstructor {
+    /// Type of the behavior tree node to create. 
     type Creates: BehaviorTreeNode;
+    /// Create a new behavior tree node. 
     fn create() -> Self::Creates;
 }
 
@@ -232,6 +264,7 @@ impl<N, M> CustomConstructedNode<N, M> where
     N: BehaviorTreeNode,
     M: CustomConstructor<Creates=N>
 {
+    /// Create a new custom constructed behavior tree node. 
     pub fn new() -> CustomConstructedNode<N, M> {
         CustomConstructedNode {
             node: M::create(),
@@ -239,6 +272,8 @@ impl<N, M> CustomConstructedNode<N, M> where
         }
     }
 
+    /// Create a new custom constructed behavior tree node, using a dummy 
+    /// object to supply type of the constructor. 
     pub fn from_existing(node: N) -> CustomConstructedNode<N, M> {
         CustomConstructedNode {
             node: node,
@@ -246,6 +281,8 @@ impl<N, M> CustomConstructedNode<N, M> where
         }
     }
 
+    /// Wrap an existing behavior tree node in the custom constructed node
+    /// wrapper.
     pub fn with(_type_assist: M) -> CustomConstructedNode<N, M> {
         CustomConstructedNode {
             node: M::create(),

@@ -3,9 +3,14 @@ use std::marker::PhantomData;
 
 /// Transition trait for InternalStateMachine. 
 pub trait InternalTransition: Copy {
+    /// The input type taken by the state machine. 
     type Internal;
+    /// The type of the internal state of the state machine. 
     type Input;
+    /// The action type taken by the state machine. 
     type Action;
+    /// Given references to the input and internal state, return the action 
+    /// to return. 
     fn step(&Self::Input, &mut Self::Internal) -> Self::Action;
 }
 
@@ -28,6 +33,7 @@ pub struct InternalStateMachine<'k, C> where
 impl<'k, C> InternalStateMachine<'k, C> where 
     C: InternalTransition + 'k
 {
+    /// Create a new internal state machine. 
     pub fn new(init_state: C::Internal) -> InternalStateMachine<'k, C> {
         InternalStateMachine {
             internal: init_state,
@@ -35,8 +41,8 @@ impl<'k, C> InternalStateMachine<'k, C> where
         }
     }
 
-    /// Constructor where the first argument is an instance of the type used 
-    /// for the state machine, to assist type inference
+    /// Create a new internal state machine, using a dummy object to supply 
+    /// the type of the internal transition. 
     pub fn with(_calling_fn: C, init_state: C::Internal) -> InternalStateMachine<'k, C> {
         InternalStateMachine {
             internal: init_state,

@@ -3,9 +3,15 @@ use std::marker::PhantomData;
 
 /// Transition trait for DualStateMachine. 
 pub trait DualTransition: Copy {
+    /// The input type taken by the state machine. 
     type Internal;
+    /// The type of the internal state of the state machine. 
     type Input;
+    /// The action type taken by the state machine. 
     type Action;
+    /// Given references to the input and internal state, consume self, 
+    /// returning the action to return and the instance of Self used to 
+    /// reconstitute the DualStateMachine. 
     fn step(self, &Self::Input, &mut Self::Internal) -> (Self::Action, Self);
 }
 
@@ -25,6 +31,7 @@ pub struct DualStateMachine<'k, C> where
 impl<'k, C> DualStateMachine<'k, C> where
     C: DualTransition + 'k
 {
+    /// Create a new dual state machine. 
     pub fn new(calling_fn: C, init_state: C::Internal) -> DualStateMachine<'k, C> {
         DualStateMachine {
             state_fn: Option::Some(calling_fn),
