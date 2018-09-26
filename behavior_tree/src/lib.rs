@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "try_trait", feature(try_trait))]
+
 extern crate stackbt_automata_impl;
 
 pub mod base_nodes;

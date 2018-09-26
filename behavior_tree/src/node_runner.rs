@@ -1,6 +1,5 @@
 use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
 use stackbt_automata_impl::automaton::Automaton;
-use std::mem::swap;
 
 /// Automaton implementation which wraps a behavior tree node and forwards 
 /// input to it and transitions back from it, automatically restarting the
@@ -29,52 +28,27 @@ impl<N> Default for NodeRunner<N> where
     }
 }
 
-fn node_runner_transition<N>(node: &mut Option<N>, input: &N::Input) 
-    -> Statepoint<N::Nonterminal, N::Terminal> where 
-    N: BehaviorTreeNode + Default + 'static
-{
-    let mut result = Option::None;
-    swap(node, &mut result);
-    match result {
-        Option::Some(n) => {
-            match n.step(input) {
-                NodeResult::Nonterminal(s, a) => {
-                    *node = Option::Some(a);
-                    Statepoint::Nonterminal(s)
-                },
-                NodeResult::Terminal(t) => {
-                    *node = Option::Some(N::default());
-                    Statepoint::Terminal(t)
-                }
-            }
-        },
-        _ => panic!("Node runner was poisoned!")
-    }
-}
-
 impl<N> Automaton<'static> for NodeRunner<N> where 
     N: BehaviorTreeNode + Default + 'static
 {
     type Input = N::Input;
     type Action = Statepoint<N::Nonterminal, N::Terminal>;
+    #[inline]
     fn transition(&mut self, input: &N::Input) -> Statepoint<N::Nonterminal, N::Terminal> {
-        node_runner_transition(&mut self.node, input)
-    }
-
-    fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&N::Input) -> Self::Action + 't> where 
-        'static: 't 
-    {
-        let node_part = &mut self.node;
-        Box::new(move |input: &N::Input| {
-            node_runner_transition(node_part, input)
-        })
-    }
-
-    fn into_fnmut(self) -> Box<FnMut(&N::Input) -> Self::Action> {
-        let mut node_part = self.node;
-        Box::new(move |input: &N::Input| {
-            node_runner_transition(&mut node_part, input)
-        })
+        match self.node
+            .take()
+            .expect("Node runner was poisoned")
+            .step(input) 
+        {
+            NodeResult::Nonterminal(s, a) => {
+                self.node = Option::Some(a);
+                Statepoint::Nonterminal(s)
+            },
+            NodeResult::Terminal(t) => {
+                self.node = Option::Some(N::default());
+                Statepoint::Terminal(t)
+            }
+        }
     }
 }
 

@@ -5,3 +5,12 @@ authors = ["eaglgenes101 <eaglgenes101@gmail.com>"]
 
 [dependencies]
 stackbt_automata_impl = { path = "../automata_impl" }
+
+[features]
+default = ["nightly"]
+
+# Enable nightly-only trait impls
+nightly = ["try_trait"]
+
+# Enable support for the Try trait
+try_trait = []

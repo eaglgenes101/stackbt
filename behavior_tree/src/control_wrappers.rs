@@ -11,54 +11,55 @@ pub trait NodeGuard {
 
 /// Guarded node, which executes the node it guards only as long as a guard 
 /// condition holds. 
-pub struct GuardedNode<M, G> where
-    M: BehaviorTreeNode,
-    G: NodeGuard<Input=M::Input, Nonterminal=M::Nonterminal>
+pub struct GuardedNode<N, G> where
+    N: BehaviorTreeNode,
+    G: NodeGuard<Input=N::Input, Nonterminal=N::Nonterminal>
 {
-    machine: M,
+    node: N,
     _exists_tuple: PhantomData<G>
 }
 
-impl<M, G> GuardedNode<M, G> where 
-    M: BehaviorTreeNode,
-    G: NodeGuard<Input=M::Input, Nonterminal=M::Nonterminal>
+impl<N, G> GuardedNode<N, G> where 
+    N: BehaviorTreeNode,
+    G: NodeGuard<Input=N::Input, Nonterminal=N::Nonterminal>
 {
-    pub fn new(machine: M) -> GuardedNode<M, G> {
+    pub fn new(node: N) -> GuardedNode<N, G> {
         GuardedNode {
-            machine: machine,
+            node: node,
             _exists_tuple: PhantomData
         }
     }
 
-    pub fn with(_type_helper: G, machine: M) -> GuardedNode<M, G> {
+    pub fn with(_type_helper: G, node: N) -> GuardedNode<N, G> {
         GuardedNode {
-            machine: machine,
+            node: node,
             _exists_tuple: PhantomData
         }
     }
 }
 
-impl<M, G> Default for GuardedNode<M, G> where 
-    M: BehaviorTreeNode + Default,
-    G: NodeGuard<Input=M::Input, Nonterminal=M::Nonterminal>
+impl<N, G> Default for GuardedNode<N, G> where 
+    N: BehaviorTreeNode + Default,
+    G: NodeGuard<Input=N::Input, Nonterminal=N::Nonterminal>
 {
-    fn default() -> GuardedNode<M, G> {
-        GuardedNode::new(M::default())
+    fn default() -> GuardedNode<N, G> {
+        GuardedNode::new(N::default())
     }
 }
 
-impl<M, G> BehaviorTreeNode for GuardedNode<M, G> where
-    M: BehaviorTreeNode,
-    G: NodeGuard<Input=M::Input, Nonterminal=M::Nonterminal>
+impl<N, G> BehaviorTreeNode for GuardedNode<N, G> where
+    N: BehaviorTreeNode,
+    G: NodeGuard<Input=N::Input, Nonterminal=N::Nonterminal>
 {
-    type Input = M::Input;
-    type Nonterminal = M::Nonterminal;
-    type Terminal = Result<M::Terminal, GuardFailure<M::Nonterminal>>;
+    type Input = N::Input;
+    type Nonterminal = N::Nonterminal;
+    type Terminal = Result<N::Terminal, GuardFailure<N::Nonterminal>>;
 
-    fn step(self, input: &M::Input) -> NodeResult<M::Nonterminal, 
+    #[inline]
+    fn step(self, input: &N::Input) -> NodeResult<N::Nonterminal, 
         Self::Terminal, Self> 
     {
-        match self.machine.step(input) {
+        match self.node.step(input) {
             NodeResult::Nonterminal(n, m) => {
                 if G::test(input, &n) {
                     NodeResult::Nonterminal(n, GuardedNode::new(m))
@@ -90,59 +91,60 @@ pub enum StepCtrlNonterm<I> {
     Paused
 }
 
-pub struct StepControlledNode<M, S> where 
-    M: BehaviorTreeNode + Default,
-    S: StepControl<Input=M::Input>
+pub struct StepControlledNode<N, S> where 
+    N: BehaviorTreeNode + Default,
+    S: StepControl<Input=N::Input>
 {
-    machine: M,
+    node: N,
     _exists_tuple: PhantomData<S>
 }
 
-impl<M, S> StepControlledNode<M, S> where 
-    M: BehaviorTreeNode + Default,
-    S: StepControl<Input=M::Input>
+impl<N, S> StepControlledNode<N, S> where 
+    N: BehaviorTreeNode + Default,
+    S: StepControl<Input=N::Input>
 {
-    pub fn new(machine: M) -> StepControlledNode<M, S> {
+    pub fn new(node: N) -> StepControlledNode<N, S> {
         StepControlledNode {
-            machine: machine,
+            node: node,
             _exists_tuple: PhantomData
         }
     }
 
-    pub fn with(_type_assist: S, machine: M) -> StepControlledNode<M, S> {
+    pub fn with(_type_assist: S, node: N) -> StepControlledNode<N, S> {
         StepControlledNode {
-            machine: machine,
+            node: node,
             _exists_tuple: PhantomData
         }
     }
 }
 
-impl<M, S> Default for StepControlledNode<M, S> where 
-    M: BehaviorTreeNode + Default,
-    S: StepControl<Input=M::Input>
+impl<N, S> Default for StepControlledNode<N, S> where 
+    N: BehaviorTreeNode + Default,
+    S: StepControl<Input=N::Input>
 {
-    fn default() -> StepControlledNode<M, S> {
-        StepControlledNode::new(M::default())
+    fn default() -> StepControlledNode<N, S> {
+        StepControlledNode::new(N::default())
     }
 }
 
-impl<M, S> BehaviorTreeNode for StepControlledNode<M, S> where 
-    M: BehaviorTreeNode + Default,
-    S: StepControl<Input=M::Input> 
+impl<N, S> BehaviorTreeNode for StepControlledNode<N, S> where 
+    N: BehaviorTreeNode + Default,
+    S: StepControl<Input=N::Input>
 {
-    type Input = M::Input;
-    type Nonterminal = StepCtrlNonterm<M::Nonterminal>;
-    type Terminal = M::Terminal;
+    type Input = N::Input;
+    type Nonterminal = StepCtrlNonterm<N::Nonterminal>;
+    type Terminal = N::Terminal;
     
-    fn step(self, input: &M::Input) -> NodeResult<Self::Nonterminal, 
-        M::Terminal, Self> 
+    #[inline]
+    fn step(self, input: &N::Input) -> NodeResult<Self::Nonterminal, 
+        N::Terminal, Self> 
     {
         match S::controlled_step(input) {
             StepDecision::Pause => {
                 NodeResult::Nonterminal(StepCtrlNonterm::Paused, self)
             },
             StepDecision::Play => {
-                match self.machine.step(input) {
+                match self.node.step(input) {
                     NodeResult::Nonterminal(n, m) => {
                         NodeResult::Nonterminal(
                             StepCtrlNonterm::Stepped(n), 
@@ -156,7 +158,7 @@ impl<M, S> BehaviorTreeNode for StepControlledNode<M, S> where
                 NodeResult::Nonterminal(StepCtrlNonterm::Paused, Self::default())
             },
             StepDecision::ResetPlay => {
-                let mut new_machine = M::default();
+                let mut new_machine = N::default();
                 match new_machine.step(input) {
                     NodeResult::Nonterminal(n, m) => {
                         NodeResult::Nonterminal(
@@ -239,6 +241,7 @@ impl <N, P> BehaviorTreeNode for PostResetNode<N, P> where
     type Nonterminal = PostResetNonterm<N::Nonterminal, N::Terminal>;
     type Terminal = N::Terminal;
 
+    #[inline]
     fn step(self, input: &N::Input) -> NodeResult<Self::Nonterminal, 
         N::Terminal, Self> 
     {
@@ -384,10 +387,10 @@ mod tests {
     #[test]
     fn step_control_test() {
         use control_wrappers::{StepControlledNode, StepCtrlNonterm};
-        use base_nodes::LeafNode;
+        use base_nodes::MachineWrapper;
         use stackbt_automata_impl::ref_state_machine::RefStateMachine;
         let machine = RefStateMachine::new(Ratchet::Zero);
-        let base_node = LeafNode::new(machine);
+        let base_node = MachineWrapper::new(machine);
         let wrapped_node = StepControlledNode::with(MagicPlayer, base_node);
         let wrapped_node_1 = match wrapped_node.step(&-1) {
             NodeResult::Nonterminal(v, m) => {
@@ -455,10 +458,10 @@ mod tests {
     #[test]
     fn post_reset_test() {
         use control_wrappers::{PostResetNode, PostResetNonterm};
-        use base_nodes::LeafNode;
+        use base_nodes::MachineWrapper;
         use stackbt_automata_impl::ref_state_machine::RefStateMachine;
         let machine = RefStateMachine::new(Ratchet::Zero);
-        let base_node = LeafNode::new(machine);
+        let base_node = MachineWrapper::new(machine);
         let wrapped_node = PostResetNode::with(Resetter, base_node);
         let wrapped_node_1 = match wrapped_node.step(&1) {
             NodeResult::Nonterminal(v, n) => {

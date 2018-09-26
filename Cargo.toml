@@ -4,3 +4,12 @@ members = [
     "macros",
     "behavior_tree"
 ]
+
+[features]
+default = []
+
+nightly = ["try_trait", "unsized_locals"]
+
+try_trait = []
+
+unsized_locals = []

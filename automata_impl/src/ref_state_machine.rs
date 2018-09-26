@@ -1,6 +1,5 @@
 use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
-use std::mem::swap;
 
 /// Transition trait for RefStateMachine. 
 pub trait ReferenceTransition: Copy {
@@ -39,18 +38,6 @@ impl <'k, C> Default for RefStateMachine<'k, C> where
     }
 }
 
-#[inline]
-fn ref_state_transition<'k, C>(fn_ref: &mut Option<C>, input: &C::Input) 
-    -> C::Action where
-    C: ReferenceTransition + 'k
-{
-    let mut out_fn = Option::None;
-    swap(fn_ref, &mut out_fn);
-    let (action, new_fn) = out_fn.unwrap().step(&input);
-    *fn_ref = Option::Some(new_fn);
-    action
-}
-
 impl <'k, C> Automaton<'k> for RefStateMachine<'k, C> where
     C: ReferenceTransition + 'k
 {
@@ -58,23 +45,12 @@ impl <'k, C> Automaton<'k> for RefStateMachine<'k, C> where
     type Action = C::Action;
     #[inline]
     fn transition(&mut self, input: &C::Input) -> C::Action {
-        ref_state_transition(&mut self.current_state, &input)
-    }
-    
-    fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&C::Input) -> C::Action + 't> where 
-        'k: 't 
-    {
-        let mut state_fn_part = &mut self.current_state;
-        Box::new(move |input: &C::Input| -> C::Action {
-            ref_state_transition(state_fn_part, &input)
-        })
-    }
-
-    fn into_fnmut(self) -> Box<FnMut(&C::Input) -> C::Action + 'k> {
-        let mut state_fn_part = self.current_state;
-        Box::new(move |input: &C::Input| -> C::Action {
-            ref_state_transition(&mut state_fn_part, &input)
-        })
+        let (action, new_fn) = self.current_state
+            .take()
+            .expect("State machine was poisoned")
+            .step(&input);
+        self.current_state = Option::Some(new_fn);
+        action
     }
 }
 

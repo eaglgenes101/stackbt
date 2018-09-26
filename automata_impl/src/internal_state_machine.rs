@@ -66,22 +66,6 @@ impl<'k, C> Automaton<'k> for InternalStateMachine<'k, C> where
     fn transition(&mut self, input: &C::Input) -> C::Action {
         C::step(&input, &mut self.internal)
     }
-
-    fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&C::Input) -> C::Action + 't> where 
-        'k: 't 
-    {
-        let mut internal_part = &mut self.internal;
-        Box::new(move |input: &C::Input| -> C::Action {
-            C::step(&input, &mut internal_part)
-        })
-    }
-
-    fn into_fnmut(self) -> Box<FnMut(&C::Input) -> C::Action + 'k> {
-        let mut internal_part = self.internal;
-        Box::new(move |input: &C::Input| -> C::Action {
-            C::step(&input, &mut internal_part)
-        })
-    }
 }
 
 impl<'k, C> FiniteStateAutomaton<'k> for InternalStateMachine<'k, C> where 

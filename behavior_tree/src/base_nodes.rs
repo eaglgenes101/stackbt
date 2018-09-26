@@ -2,6 +2,7 @@ use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
 use std::marker::PhantomData;
 use stackbt_automata_impl::automaton::Automaton;
 
+/// Wait condition for a predicate wait node. 
 pub trait WaitCondition {
     type Input;
     type Nonterminal;
@@ -48,6 +49,7 @@ impl<F> BehaviorTreeNode for PredicateWait<F> where
     type Nonterminal = F::Nonterminal;
     type Terminal = F::Terminal;
 
+    #[inline]
     fn step(self, input: &F::Input) -> NodeResult<F::Nonterminal, F::Terminal, Self> {
         match F::do_end(input) {
             Statepoint::Terminal(t) => NodeResult::Terminal(t),
@@ -56,22 +58,23 @@ impl<F> BehaviorTreeNode for PredicateWait<F> where
     }
 }
 
-pub trait NodeFn {
+/// Wrapper for a function call, intended for Evaluation. 
+pub trait CallWrapper {
     type Input;
     type Output;
     fn call(&Self::Input) -> Self::Output;
 }
 
-/// Node which serves as a wrapper around a function, immediately terminating 
-/// with its return value. 
+/// Node which calls a function wrapper with its input, immediately 
+/// terminating with its return value. 
 pub struct Evaluation<F> where 
-    F: NodeFn
+    F: CallWrapper
 {
     _who_cares: PhantomData<F>
 }
 
 impl<F> Evaluation<F> where 
-    F: NodeFn
+    F: CallWrapper
 {
     pub fn new() -> Evaluation<F> {
         Evaluation {
@@ -87,7 +90,7 @@ impl<F> Evaluation<F> where
 }
 
 impl<F> Default for Evaluation<F> where 
-    F: NodeFn
+    F: CallWrapper
 {
     fn default() -> Evaluation<F> {
         Evaluation::new()
@@ -95,18 +98,20 @@ impl<F> Default for Evaluation<F> where
 }
 
 impl<F> BehaviorTreeNode for Evaluation<F> where 
-    F: NodeFn
+    F: CallWrapper
 {
     type Input = F::Input;
     type Nonterminal = ();
     type Terminal = F::Output;
 
+    #[inline]
     fn step(self, input: &F::Input) -> NodeResult<(), F::Output, Self> {
         NodeResult::Terminal(F::call(input))
     }
 }
 
-pub struct LeafNode<M, N, T> where 
+/// Node wrapper for an automaton. 
+pub struct MachineWrapper<M, N, T> where 
     M: Automaton<'static, Action=Statepoint<N, T>> + 'static
 {
     machine: M,
@@ -114,11 +119,11 @@ pub struct LeafNode<M, N, T> where
     _exists_tuple: PhantomData<(N, T)>,
 }
 
-impl<M, N, T> LeafNode<M, N, T> where 
+impl<M, N, T> MachineWrapper<M, N, T> where 
     M: Automaton<'static, Action=Statepoint<N, T>> + 'static
 {
-    pub fn new(machine: M) -> LeafNode<M, N, T> {
-        LeafNode { 
+    pub fn new(machine: M) -> MachineWrapper<M, N, T> {
+        MachineWrapper { 
             machine,
             _m_bound: PhantomData,
             _exists_tuple: PhantomData
@@ -126,21 +131,22 @@ impl<M, N, T> LeafNode<M, N, T> where
     }
 }
 
-impl<M, N, T> Default for LeafNode<M, N, T> where 
+impl<M, N, T> Default for MachineWrapper<M, N, T> where 
     M: Automaton<'static, Action=Statepoint<N, T>> + Default + 'static
 {
-    fn default() -> LeafNode<M, N, T> {
-        LeafNode::new(M::default())
+    fn default() -> MachineWrapper<M, N, T> {
+        MachineWrapper::new(M::default())
     }
 }
 
-impl<M, N, T> BehaviorTreeNode for LeafNode<M, N, T> where 
+impl<M, N, T> BehaviorTreeNode for MachineWrapper<M, N, T> where 
     M: Automaton<'static, Action=Statepoint<N, T>> + 'static
 {
     type Input = M::Input;
     type Nonterminal = N;
     type Terminal = T;
 
+    #[inline]
     fn step(self, input: &M::Input) -> NodeResult<N, T, Self> {
         let mut mach = self;
         match mach.machine.transition(input) {
@@ -158,7 +164,7 @@ impl<M, N, T> BehaviorTreeNode for LeafNode<M, N, T> where
 mod tests {
     use behavior_tree_node::Statepoint;
     use stackbt_automata_impl::internal_state_machine::InternalTransition;
-    use base_nodes::{WaitCondition, NodeFn};
+    use base_nodes::{WaitCondition, CallWrapper};
 
     struct ThingPred;
 
@@ -192,7 +198,7 @@ mod tests {
 
     struct EvaluationValue;
 
-    impl NodeFn for EvaluationValue {
+    impl CallWrapper for EvaluationValue {
         type Input = i64;
         type Output = i64;
         fn call(val: &i64) -> i64 {
@@ -240,9 +246,9 @@ mod tests {
     fn leaf_test() {
         use behavior_tree_node::{BehaviorTreeNode, NodeResult};
         use stackbt_automata_impl::internal_state_machine::InternalStateMachine;
-        use base_nodes::LeafNode;
+        use base_nodes::MachineWrapper;
         let machine = InternalStateMachine::with(ThingLeaf, 0);
-        let thing = LeafNode::new(machine);
+        let thing = MachineWrapper::new(machine);
         let thing_1 = match thing.step(&4) {
             NodeResult::Nonterminal(a, b) => {
                 assert_eq!(a, 0);

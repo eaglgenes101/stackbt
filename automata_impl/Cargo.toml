@@ -2,3 +2,12 @@
 name = "stackbt_automata_impl"
 version = "0.1.0"
 authors = ["eaglgenes101 <eaglgenes101@gmail.com>"]
+
+[features]
+default = []
+
+# Enable all nightly-dependent features
+nightly = ["unsized_locals"]
+
+# Enable support for unsized locals
+unsized_locals = []

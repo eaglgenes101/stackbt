@@ -1,6 +1,6 @@
 use behavior_tree_node::Statepoint;
 use serial_node::{Enumerable, SerialDecider, NontermDecision, TermDecision};
-use parallel_node::{ParallelDecider, ParallelDecision};
+use parallel_node::ParallelDecider;
 use std::marker::PhantomData;
 
 /// Runs all nodes in sequence, one at a time, regardless of how they resolve 
@@ -75,14 +75,15 @@ impl<I, N, R, T> ParallelDecider for ParallelRunner<I, N, R, T> where
     type Term = T;
     type Exit = Box<[Statepoint<R, T>]>;
 
+    #[inline]
     fn each_step(_input: &I, states: Box<[Statepoint<Statepoint<N, R>, T>]>) -> 
-        ParallelDecision<Box<[Statepoint<Self::Nonterm, T>]>, Self::Exit> 
+        Statepoint<Box<[Statepoint<Self::Nonterm, T>]>, Self::Exit> 
     {
         if states.iter().any(|val| match val {
             Statepoint::Nonterminal(Statepoint::Nonterminal(_)) => true,
             _ => false 
         }) {
-            ParallelDecision::Stay(states)
+            Statepoint::Nonterminal(states)
         } else {
             let vec = states.into_vec().into_iter().map(|val| 
                 match val {
@@ -93,7 +94,7 @@ impl<I, N, R, T> ParallelDecider for ParallelRunner<I, N, R, T> where
                     Statepoint::Terminal(k) => Statepoint::Terminal(k)
                 }
             ).collect::<Vec<_>>();
-            ParallelDecision::Exit(vec.into_boxed_slice())
+            Statepoint::Terminal(vec.into_boxed_slice())
         }
     }
 }
@@ -112,8 +113,9 @@ impl<I, N, T> ParallelDecider for ParallelRacer<I, N, T> where
     type Term = T;
     type Exit = (usize, T);
 
+    #[inline]
     fn each_step(_input: &I, states: Box<[Statepoint<N, T>]>) -> 
-        ParallelDecision<Box<[Statepoint<N, T>]>, (usize, T)> 
+        Statepoint<Box<[Statepoint<N, T>]>, (usize, T)> 
     {
         let mut retval = Option::None;
         for value in states.iter().enumerate() {
@@ -123,8 +125,8 @@ impl<I, N, T> ParallelDecider for ParallelRacer<I, N, T> where
             }
         };
         match retval {
-            Option::None => ParallelDecision::Stay(states),
-            Option::Some(v) => ParallelDecision::Exit(v)
+            Option::None => Statepoint::Nonterminal(states),
+            Option::Some(v) => Statepoint::Terminal(v)
         }
 
     }
@@ -132,8 +134,7 @@ impl<I, N, T> ParallelDecider for ParallelRacer<I, N, T> where
 
 #[cfg(test)]
 mod tests {
-
-    use base_nodes::LeafNode;
+    use base_nodes::MachineWrapper;
     use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
     use stackbt_automata_impl::automaton::Automaton;
     use stackbt_automata_impl::internal_state_machine::{InternalTransition,
@@ -141,10 +142,10 @@ mod tests {
     use stackbt_automata_impl::ref_state_machine::{ReferenceTransition,
         RefStateMachine};
     use serial_node::{Enumerable, EnumNode};
-    use parallel_node::NodeCollection;
     use map_wrappers::{OutputNodeMap, OutputMappedNode};
     use control_wrappers::{NodeGuard, GuardedNode};
     use node_runner::NodeRunner;
+    use std::marker::PhantomData;
 
     #[derive(Copy, Clone, Default)]
     struct IndefiniteIncrement;
@@ -185,9 +186,9 @@ mod tests {
     }
 
     enum MultiMachine {
-        First(LeafNode<InternalStateMachine<'static, 
+        First(MachineWrapper<InternalStateMachine<'static, 
             IndefiniteIncrement>, i64, i64>),
-        Second(LeafNode<InternalStateMachine<'static, 
+        Second(MachineWrapper<InternalStateMachine<'static, 
             IndefiniteIncrement>, i64, i64>)
     }
 
@@ -229,10 +230,10 @@ mod tests {
         fn new(thing: IndexEnum) -> MultiMachine {
             match thing {
                 IndexEnum::First => MultiMachine::First(
-                    LeafNode::default()
+                    MachineWrapper::default()
                 ),
                 IndexEnum::Second => MultiMachine::Second(
-                    LeafNode::default()
+                    MachineWrapper::default()
                 )
             }
         }
@@ -331,9 +332,9 @@ mod tests {
     }
 
     enum WrappedMachine {
-        First(OutputMappedNode<LeafNode<InternalStateMachine<'static, 
+        First(OutputMappedNode<MachineWrapper<InternalStateMachine<'static, 
             IndefiniteIncrement>, i64, i64>, ValSep>),
-        Second(OutputMappedNode<LeafNode<InternalStateMachine<'static, 
+        Second(OutputMappedNode<MachineWrapper<InternalStateMachine<'static, 
             IndefiniteIncrement>, i64, i64>, ValSep>)
     }
 
@@ -524,6 +525,7 @@ mod tests {
         }
     }
 
+    #[derive(Copy, Clone)]
     struct ParMachine {
         first: RefStateMachine<'static, TwoCycler>,
         second: RefStateMachine<'static, ThreeCycler>
@@ -538,15 +540,20 @@ mod tests {
         }
     }
 
-    impl NodeCollection for ParMachine {
-        type Input = ();
-        type Nonterminal = Statepoint<(), ()>;
-        type Terminal = ();
+    #[derive(Copy, Clone, Default)]
+    struct ParMachineController;
 
-        fn run_all(&mut self, input: &()) -> Box<[Statepoint<Self::Nonterminal, ()>]> {
+    impl InternalTransition for ParMachineController {
+        type Input = ();
+        type Internal = ParMachine;
+        type Action = Box<[Statepoint<Statepoint<(), ()>, ()>]>;
+
+        fn step(input: &(), mach: &mut ParMachine) -> Box<[Statepoint<
+            Statepoint<(), ()>, ()>]> 
+        {
             let thing = vec![
-                Statepoint::Nonterminal(self.first.transition(input)), 
-                Statepoint::Nonterminal(self.second.transition(input))
+                Statepoint::Nonterminal(mach.first.transition(input)), 
+                Statepoint::Nonterminal(mach.second.transition(input))
             ];
             thing.into_boxed_slice()
         }
@@ -554,9 +561,10 @@ mod tests {
 
     #[test]
     fn parallel_runner_test() {
-        use parallel_node::{NodeCollection, ParallelBranchNode, ParallelDecider};
+        use parallel_node::ParallelBranchNode;
         use node_compositions::ParallelRunner;
-        let test_node = ParallelBranchNode::<ParMachine, ParallelRunner<_, _, _, _>>::new();
+        let test_node = ParallelBranchNode::<InternalStateMachine<
+            ParMachineController>, ParallelRunner<_, _, _, _>>::default();
         let test_node_1 = match test_node.step(&()) {
             NodeResult::Nonterminal(v, n) => match v.as_ref() {
                 [
@@ -613,35 +621,18 @@ mod tests {
         };
     }
 
-    struct WrapParMachine {
-        first: RefStateMachine<'static, TwoCycler>,
-        second: RefStateMachine<'static, ThreeCycler>,
-    }
+    #[derive(Default, Copy, Clone)]
+    struct WrapParMachineController;
 
-    impl Default for WrapParMachine {
-        fn default() -> WrapParMachine {
-            WrapParMachine {
-                first: RefStateMachine::new(TwoCycler::default()),
-                second: RefStateMachine::new(ThreeCycler::default())
-            }
-        }
-    }
-
-    impl NodeCollection for WrapParMachine {
+    impl InternalTransition for WrapParMachineController {
         type Input = ();
-        type Nonterminal = ();
-        type Terminal = ();
+        type Internal = ParMachine;
+        type Action = Box<[Statepoint<(), ()>]>;
 
-        fn run_all(&mut self, input: &()) -> Box<[Statepoint<(), ()>]> {
+        fn step(input: &(), mach: &mut ParMachine) -> Box<[Statepoint<(), ()>]> {
             let thing = vec![
-                match self.first.transition(input) {
-                    Statepoint::Nonterminal(_) => Statepoint::Nonterminal(()),
-                    Statepoint::Terminal(_) => Statepoint::Terminal(())
-                },
-                match self.second.transition(input) {
-                    Statepoint::Nonterminal(_) => Statepoint::Nonterminal(()),
-                    Statepoint::Terminal(_) => Statepoint::Terminal(())
-                }
+                mach.first.transition(input), 
+                mach.second.transition(input)
             ];
             thing.into_boxed_slice()
         }
@@ -649,9 +640,10 @@ mod tests {
 
     #[test]
     fn parallel_racer_test() {
-        use parallel_node::{NodeCollection, ParallelBranchNode, ParallelDecider};
+        use parallel_node::ParallelBranchNode;
         use node_compositions::ParallelRacer;
-        let test_node = ParallelBranchNode::<WrapParMachine, ParallelRacer<_, _, _>>::new();
+        let test_node = ParallelBranchNode::<InternalStateMachine<
+            WrapParMachineController>, ParallelRacer<_, _, _>>::default();
         let test_node_1 = match test_node.step(&()) {
             NodeResult::Nonterminal(_, n) => n,
             _ => unreachable!("Expected nonterminal transition")

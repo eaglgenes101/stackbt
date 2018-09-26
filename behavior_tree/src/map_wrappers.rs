@@ -51,6 +51,7 @@ impl<N, M> BehaviorTreeNode for InputMappedNode<N, M> where
     type Nonterminal = N::Nonterminal;
     type Terminal = N::Terminal;
 
+    #[inline]
     fn step(self, input: &M::In) -> NodeResult<N::Nonterminal, N::Terminal, Self> {
         match self.node.step(&M::input_transform(input)) {
             NodeResult::Nonterminal(n, m) => NodeResult::Nonterminal(
@@ -115,6 +116,7 @@ impl<N, M> BehaviorTreeNode for OutputMappedNode<N, M> where
     type Nonterminal = M::NontermOut;
     type Terminal = M::TermOut;
 
+    #[inline]
     fn step(self, input: &N::Input) -> NodeResult<M::NontermOut, M::TermOut, Self> {
         match self.node.step(input) {
             NodeResult::Nonterminal(n, m) => NodeResult::Nonterminal(
@@ -184,6 +186,7 @@ impl<N, M> BehaviorTreeNode for LazyConstructedNode<N, M> where
     type Nonterminal = N::Nonterminal;
     type Terminal = N::Terminal;
 
+    #[inline]
     fn step(self, input: &N::Input) -> NodeResult<N::Nonterminal, N::Terminal, Self> {
         let node = if let Option::Some(n) = self.node {
             n
@@ -256,8 +259,8 @@ impl<N, M> BehaviorTreeNode for CustomConstructedNode<N, M> where
     type Nonterminal = N::Nonterminal;
     type Terminal = N::Terminal;
 
+    #[inline]
     fn step(self, input: &N::Input) -> NodeResult<N::Nonterminal, N::Terminal, Self> {
-
         match self.node.step(input) {
             NodeResult::Nonterminal(n, i) => NodeResult::Nonterminal(
                 n, CustomConstructedNode::from_existing(i)
@@ -272,7 +275,7 @@ mod tests {
     use map_wrappers::{InputNodeMap, OutputNodeMap, LazyConstructor, CustomConstructor};
     use stackbt_automata_impl::internal_state_machine::{InternalTransition, 
         InternalStateMachine};
-    use base_nodes::{WaitCondition, LeafNode, PredicateWait};
+    use base_nodes::{WaitCondition, MachineWrapper, PredicateWait};
     use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
 
     struct Echoer;
@@ -373,11 +376,11 @@ mod tests {
 
     impl LazyConstructor for LazyWrapper 
     {
-        type Creates = LeafNode<InternalStateMachine<'static,
+        type Creates = MachineWrapper<InternalStateMachine<'static,
             IndefinitePlayback>, i64, i64>;
 
         fn create(input: &i64) -> Self::Creates {
-            LeafNode::new(InternalStateMachine::with(IndefinitePlayback, *input))
+            MachineWrapper::new(InternalStateMachine::with(IndefinitePlayback, *input))
         }
     }
 
@@ -414,10 +417,10 @@ mod tests {
 
     impl CustomConstructor for FixedWrapper 
     {
-        type Creates = LeafNode<InternalStateMachine<'static,
+        type Creates = MachineWrapper<InternalStateMachine<'static,
             IndefinitePlayback>, i64, i64>;
         fn create() -> Self::Creates {
-            LeafNode::new(InternalStateMachine::with(IndefinitePlayback, 12))
+            MachineWrapper::new(InternalStateMachine::with(IndefinitePlayback, 12))
         }
     }
     #[test]

@@ -205,21 +205,8 @@ macro_rules! enum_divide_main {
 }
 
 /// Declarative macro for quickly and easily declaring enums as partitions 
-/// of existing ones. This macro expects to enclose a statement with form 
-/// similar to the following: 
-/// ```ignore
-/// #[attribute_0]
-/// #[attribute_1]
-/// #[attribute_2]
-/// enum NewName: OldName {
-///     OldVariant00 | OldVariant01 => NewVariant0,
-///     #[field_attribute_0]
-///     #[field_attribute_1]
-///     #[field_attribute_2]
-///     OldVariant10 => NewVariant1,
-///     OldVariant11 => NewVariant2
-/// }
-/// ```
+/// of existing ones. 
+/// 
 /// The new enum's name must be a legal, unused enum name, and its variants 
 /// must all be valid enum variant names. In addition, the old enum must be 
 /// fieldless, and the declared old enum's variants must actually be an  

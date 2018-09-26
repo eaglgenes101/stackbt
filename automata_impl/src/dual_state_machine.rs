@@ -1,6 +1,5 @@
 use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
-use std::mem::swap;
 
 /// Transition trait for DualStateMachine. 
 pub trait DualTransition: Copy {
@@ -44,44 +43,20 @@ impl<'k, C> Default for DualStateMachine<'k, C> where
     }
 }
 
-#[inline]
-fn dual_state_transition<C>(fn_ref: &mut Option<C>, store_ref: &mut C::Internal, 
-    input_ref: &C::Input) -> C::Action where
-    C: DualTransition
-{
-    let mut tmp_fn = Option::None;
-    swap(fn_ref, &mut tmp_fn);
-    let (action, new_fn) = tmp_fn.unwrap().step(input_ref, store_ref);
-    *fn_ref = Option::Some(new_fn);
-    action
-}
-
 impl<'k, C> Automaton<'k> for DualStateMachine<'k, C> where 
     C: DualTransition + 'k
 {
     type Input = C::Input;
     type Action = C::Action;
+    
     #[inline]
     fn transition(&mut self, input: &C::Input) -> C::Action {
-        dual_state_transition(&mut self.state_fn, &mut self.internal, &input)
-    }
-    
-    fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&C::Input) -> C::Action + 't> where 
-        'k: 't 
-    {
-        let mut state_fn_part = &mut self.state_fn;
-        let mut internal_part = &mut self.internal;
-        Box::new(move |input: &C::Input| -> C::Action {
-            dual_state_transition(state_fn_part, internal_part, &input)
-        })
-    }
-
-    fn into_fnmut(self) -> Box<FnMut(&C::Input) -> C::Action + 'k> {
-        let mut state_fn_part = self.state_fn;
-        let mut internal_part = self.internal;
-        Box::new(move |input: &C::Input| -> C::Action {
-            dual_state_transition(&mut state_fn_part, &mut internal_part, &input)
-        })
+        let (action, new_fn) = self.state_fn
+            .take()
+            .expect("State machine was poisoned")
+            .step(input, &mut self.internal);
+        self.state_fn = Option::Some(new_fn);
+        action
     }
 }
 

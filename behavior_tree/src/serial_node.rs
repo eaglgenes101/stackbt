@@ -1,6 +1,7 @@
 use behavior_tree_node::{BehaviorTreeNode, NodeResult};
 use std::marker::PhantomData;
 
+/// Trait for a type which is exhaustively enumerable. 
 pub trait Enumerable: Copy + Sized {
     fn zero() -> Self;
     fn successor(self) -> Option<Self>;
@@ -101,6 +102,7 @@ impl<E, D, X> BehaviorTreeNode for SerialBranchNode<E, D, X> where
     type Nonterminal = NontermReturn<E::Discriminant, E::Nonterminal, E::Terminal>;
     type Terminal = X;
 
+    #[inline]
     fn step(self, input: &E::Input) -> NodeResult<Self::Nonterminal, X, Self> {
         let discriminant = self.node.discriminant();
         match self.node.step(input) {

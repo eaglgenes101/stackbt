@@ -1,6 +1,5 @@
 use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
-use std::mem::swap;
 
 /// Nonterminal pushdown transition. Push pushes a new state machine onto the 
 /// pushdown stack, Stay keeps the state machine as it is, and Pop removes the 
@@ -28,8 +27,8 @@ pub enum TerminalTransition<A, N> {
 /// runtime costs. 
 pub struct PushdownAutomaton <'k, I, A, N, T> where 
     I: 'k,
-    N: FiniteStateAutomaton<'k> + 'k,
-    T: FiniteStateAutomaton<'k> + 'k,
+    N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, N>> + 'k,
+    T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, N>> + 'k,
 {
     bottom: Option<T>,
     stack: Vec<N>,
@@ -73,47 +72,6 @@ impl<'k, I, A, N, T> PushdownAutomaton<'k, I, A, N, T> where
     }
 }
 
-#[inline]
-fn stack_elm_transition<'k, I, A, N, T> 
-    (stack: &mut Vec<N>, bottom: &mut Option<T>, input: &I) -> A where 
-    I: 'k,
-    N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, N>> + 'k,
-    T: FiniteStateAutomaton<'k, Input=I, Action=TerminalTransition<A, N>> + 'k,
-{
-    match stack.pop() {
-        Option::Some(mut val) => {
-            match val.transition(input) {
-                PushdownTransition::Push(act, new) => {
-                    stack.push(val);
-                    stack.push(new.into());
-                    act
-                },
-                PushdownTransition::Stay(act) => {
-                    stack.push(val);
-                    act
-                },
-                PushdownTransition::Pop(act) => act
-            }
-        },
-        Option::None => {
-            let mut tmp_bottom = Option::None;
-            swap(&mut tmp_bottom, bottom);
-            let mut tmp_some = tmp_bottom.unwrap();
-            match tmp_some.transition(input) {
-                TerminalTransition::Push(act, new) => {
-                    stack.push(new.into());
-                    *bottom = Option::Some(tmp_some);
-                    act
-                },
-                TerminalTransition::Stay(act) => {
-                    *bottom = Option::Some(tmp_some);
-                    act
-                }
-            }
-        }
-    }
-}
-
 impl<'k, I, A, N, T> Automaton<'k> for PushdownAutomaton<'k, I, A, N, T> where 
     I: 'k,
     N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, N>> + 'k,
@@ -123,23 +81,38 @@ impl<'k, I, A, N, T> Automaton<'k> for PushdownAutomaton<'k, I, A, N, T> where
     type Action = A;
     #[inline]
     fn transition(&mut self, input: &I) -> A {
-        stack_elm_transition(&mut self.stack, &mut self.bottom, &input)
-    }
-
-    fn as_fnmut<'t>(&'t mut self) -> Box<FnMut(&I) -> A + 't> where 'k: 't {
-        let mut stack_part = &mut self.stack;
-        let mut bottom_part = &mut self.bottom;
-        Box::new(move |input: &I| -> A {
-            stack_elm_transition(stack_part, bottom_part, &input)
-        })
-    }
-
-    fn into_fnmut(self) -> Box<FnMut(&I) -> A + 'k> {
-        let mut bottom_part = self.bottom;
-        let mut stack_part = self.stack;
-        Box::new(move |input: &I| -> A {
-            stack_elm_transition(&mut stack_part, &mut bottom_part, &input)
-        })
+        match self.stack.pop() {
+            Option::Some(mut val) => {
+                match val.transition(input) {
+                    PushdownTransition::Push(act, new) => {
+                        self.stack.push(val);
+                        self.stack.push(new);
+                        act
+                    },
+                    PushdownTransition::Stay(act) => {
+                        self.stack.push(val);
+                        act
+                    },
+                    PushdownTransition::Pop(act) => act
+                }
+            },
+            Option::None => {
+                let mut tmp_some = self.bottom
+                    .take()
+                    .expect("Pushdown automaton was poisoned");
+                match tmp_some.transition(input) {
+                    TerminalTransition::Push(act, new) => {
+                        self.stack.push(new);
+                        self.bottom = Option::Some(tmp_some);
+                        act
+                    },
+                    TerminalTransition::Stay(act) => {
+                        self.bottom = Option::Some(tmp_some);
+                        act
+                    }
+                }
+            }
+        }
     }
 }
 

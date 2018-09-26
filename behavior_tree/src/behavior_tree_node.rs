@@ -1,3 +1,6 @@
+#[cfg(feature = "try_trait")]
+use std::ops::Try;
+
 /// In this library, behavior trees are implemented in a very generalized 
 /// manner, making them very versatile. At each step, a behavior tree node 
 /// steps some, and stop at either an exit point, which abstracts over that 
@@ -19,15 +22,57 @@ pub enum Statepoint<N, T> {
     Terminal(T),
 }
 
+#[cfg(feature = "try_trait")]
+impl<N, T> Try for Statepoint<N, T> {
+    type Ok = N;
+    type Error = T;
+
+    fn into_result(self) -> Result<N, T> {
+        match self {
+            Statepoint::Nonterminal(n) => Result::Ok(n),
+            Statepoint::Terminal(t) => Result::Err(t)
+        }
+    }
+
+    fn from_error(term: T) -> Self {
+        Statepoint::Terminal(term)
+    }
+
+    fn from_ok(nonterm: N) -> Self {
+        Statepoint::Nonterminal(nonterm)
+    }
+}
+
 /// The return value of behavior tree nodes. To statically prevent further 
 /// running after a node reaches a terminal state, the whole node is taken by 
 /// move during a step. At a nonterminal, the nonterminal decision point value 
 /// is returned along with the modified behavior tree node, while at a terminal, 
 /// only the terminal decision point value is returned, with the node instance 
 /// dropped and never to return. 
-pub enum NodeResult<N, T, M> {
-    Nonterminal(N, M),
+pub enum NodeResult<R, T, N> {
+    Nonterminal(R, N),
     Terminal(T)
+}
+
+#[cfg(feature = "try_trait")]
+impl<R, T, N> Try for NodeResult<R, T, N> {
+    type Ok = (R, N);
+    type Error = T;
+
+    fn into_result(self) -> Result<(R, N), T> {
+        match self {
+            NodeResult::Nonterminal(r, n) => Result::Ok((r, n)),
+            NodeResult::Terminal(t) => Result::Err(t)
+        }
+    }
+
+    fn from_error(term: T) -> Self {
+        NodeResult::Terminal(term)
+    }
+
+    fn from_ok(nonterm: (R, N)) -> Self {
+        NodeResult::Nonterminal(nonterm.0, nonterm.1)
+    }
 }
 
 /// The behavior tree node trait itself. 
