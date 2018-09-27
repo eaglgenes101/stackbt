@@ -2,7 +2,7 @@ use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 
 /// Transition trait for InternalStateMachine. 
-pub trait InternalTransition: Copy {
+pub trait InternalTransition {
     /// The input type taken by the state machine. 
     type Internal;
     /// The type of the internal state of the state machine. 
@@ -19,9 +19,9 @@ pub trait InternalTransition: Copy {
 /// called with the input and current state, returning an action and possibly 
 /// modifying the state. 
 /// 
-/// To enforce that the state is self-contained, the internal state must 
-/// be a Copy type, which is incompatible with safe references to non-static 
-/// memory. 
+/// It is legal to operate the InternalStateMachine on a non-copy type, but 
+/// FiniteStateAutomaton is only implemented if the internal state is Copy,
+/// which implies that the state is self-contained. 
 #[derive(Copy, Clone)]
 pub struct InternalStateMachine<'k, C> where 
     C: InternalTransition + 'k
@@ -75,7 +75,8 @@ impl<'k, C> Automaton<'k> for InternalStateMachine<'k, C> where
 }
 
 impl<'k, C> FiniteStateAutomaton<'k> for InternalStateMachine<'k, C> where 
-    C: InternalTransition
+    C: InternalTransition,
+    C::Internal: Copy
 {}
 
 #[cfg(test)]

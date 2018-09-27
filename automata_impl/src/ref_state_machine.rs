@@ -2,7 +2,7 @@ use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 
 /// Transition trait for RefStateMachine. 
-pub trait ReferenceTransition: Copy {
+pub trait ReferenceTransition {
     /// The input type taken by the state machine. 
     type Input;
     /// The type of the internal state of the state machine. 
@@ -61,7 +61,7 @@ impl <'k, C> Automaton<'k> for RefStateMachine<'k, C> where
 }
 
 impl <'k, C> FiniteStateAutomaton<'k> for RefStateMachine<'k, C> where 
-    C: ReferenceTransition + 'k
+    C: ReferenceTransition + Copy + 'k
 {}
 
 #[cfg(test)]

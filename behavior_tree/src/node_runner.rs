@@ -1,5 +1,5 @@
 use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
-use stackbt_automata_impl::automaton::Automaton;
+use stackbt_automata_impl::automaton::{Automaton, FiniteStateAutomaton};
 
 /// Automaton implementation which wraps a behavior tree node and forwards 
 /// input to it and transitions back from it, automatically restarting the
@@ -52,6 +52,10 @@ impl<N> Automaton<'static> for NodeRunner<N> where
         }
     }
 }
+
+impl<N> FiniteStateAutomaton<'static> for NodeRunner<N> where 
+    N: BehaviorTreeNode + Default + Copy + 'static
+{}
 
 #[cfg(test)]
 mod tests {

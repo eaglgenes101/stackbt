@@ -2,11 +2,11 @@ use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 
 /// Transition trait for DualStateMachine. 
-pub trait DualTransition: Copy {
+pub trait DualTransition {
     /// The input type taken by the state machine. 
-    type Internal;
-    /// The type of the internal state of the state machine. 
     type Input;
+    /// The type of the internal state of the state machine. 
+    type Internal;
     /// The action type taken by the state machine. 
     type Action;
     /// Given references to the input and internal state, consume self, 
@@ -68,7 +68,8 @@ impl<'k, C> Automaton<'k> for DualStateMachine<'k, C> where
 }
 
 impl<'k, C> FiniteStateAutomaton<'k> for DualStateMachine<'k, C> where 
-    C: DualTransition
+    C: DualTransition + Copy,
+    C::Internal: Copy
 {}
 
 #[cfg(test)]
