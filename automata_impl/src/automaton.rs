@@ -79,6 +79,18 @@ pub trait Automaton<'k> {
     }
 }
 
+impl<'k, P> Automaton<'k> for Box<P> where 
+    P: Automaton<'k> + ?Sized,
+    P::Input: 'k
+{
+    type Input = P::Input;
+    type Action = P::Action;
+
+    fn transition(&mut self, input: &P::Input) -> P::Action {
+        self.as_mut().transition(input)
+    }
+}
+
 impl<'k, I, A> Automaton<'k> for FnMut(&I) -> A + 'k where 
     I: 'k
 {

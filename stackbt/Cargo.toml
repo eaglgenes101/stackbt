@@ -15,13 +15,8 @@ stackbt_macros = { path = "../macros", version = "^0.1.1"  }
 [features]
 default = []
 
-nightly = ["try_trait", "unsized_locals"]
+nightly = ["try_trait"]
 
 try_trait = [
     "stackbt_behavior_tree/try_trait"
-]
-
-unsized_locals = [
-    "stackbt_automata_impl/unsized_locals",
-    "stackbt_behavior_tree/unsized_locals"
 ]

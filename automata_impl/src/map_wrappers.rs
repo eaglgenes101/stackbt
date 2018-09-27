@@ -1,3 +1,43 @@
+//!
+//! It sometimes happens that you have an automaton on hand that acts 
+//! somewhat, but not exactly, like you want it to, or it works like you want 
+//! it to but has the wrong type. In those cases, you can use a wrapper 
+//! instead of writing a whole new automaton. 
+//!
+//! An example of the usage of wrappers: 
+//! ```
+//! use stackbt_automata_impl::map_wrappers::{InputMachineMap, 
+//!     InputMappedMachine};
+//! use stackbt_automata_impl::automaton::Automaton;
+//! use std::convert::AsMut;
+//! 
+//! struct Inverter;
+//! 
+//! impl InputMachineMap for Inverter {
+//!     type In = bool;
+//!     type Out = bool;
+//!     fn input_transform(input: &bool) -> bool {
+//!         !*input
+//!     }
+//! }
+//! 
+//! let mut count = 0;
+//! let mut counter: Box<FnMut(&bool) -> i64> = Box::new(
+//!     move |do_increment: &bool| {
+//!         if *do_increment {
+//!             count += 1;
+//!         }
+//!         count
+//!     }
+//! );
+//! 
+//! let mut modified_counter = InputMappedMachine::with(Inverter, counter);
+//! 
+//! assert_eq!(modified_counter.transition(&true), 0);
+//! assert_eq!(modified_counter.transition(&false), 1);
+//! assert_eq!(modified_counter.transition(&true), 1);
+//! ```
+
 use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 

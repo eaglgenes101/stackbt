@@ -1,18 +1,6 @@
 #[cfg(feature = "try_trait")]
 use std::ops::Try;
 
-/// In this library, behavior trees are implemented in a very generalized 
-/// manner, making them very versatile. At each step, a behavior tree node 
-/// steps some, and stop at either an exit point, which abstracts over that 
-/// node's terminal states, or a decision point, which abstracts over that 
-/// node's nonterminal states. At a terminal state, only a transition to an 
-/// entirely new behavior tree node is possible. However, at a decision point,
-/// the parent behavior tree node can either decide to step the behavior tree
-/// node as normal, or cause a transition to an entirely new behavior tree 
-/// node, which abandons the original child node. The parent can also 
-/// themselves transition to an exit point, which necessarily causes their 
-/// children to be halted and dropped. 
-
 /// A generic enum which are provided to help implementations of certain 
 /// behavior tree nodes choose whether a particular state is nonterminal or 
 /// terminal, and to work with nonterminal or terminal states their children 

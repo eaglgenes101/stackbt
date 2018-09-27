@@ -14,10 +14,7 @@ stackbt_automata_impl = { path = "../automata_impl", version = "^0.1.1" }
 default = []
 
 # Enable all nightly-dependent features
-nightly = ["try_trait", "unsized_locals"]
+nightly = ["try_trait"]
 
 # Enable support for the Try trait
 try_trait = []
-
-# Enable support for unsized locals
-unsized_locals = []
