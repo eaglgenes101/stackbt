@@ -4,9 +4,9 @@ use std::marker::PhantomData;
 /// Transition trait for InternalStateMachine. 
 pub trait InternalTransition {
     /// The input type taken by the state machine. 
-    type Internal;
-    /// The type of the internal state of the state machine. 
     type Input;
+    /// The type of the internal state of the state machine. 
+    type Internal;
     /// The action type taken by the state machine. 
     type Action;
     /// Given references to the input and internal state, return the action 
@@ -14,14 +14,39 @@ pub trait InternalTransition {
     fn step(&Self::Input, &mut Self::Internal) -> Self::Action;
 }
 
-/// State machine implementation through a single, immutable function pointer 
-/// called on an encapsualted state. Each step, the referenced function is 
-/// called with the input and current state, returning an action and possibly 
-/// modifying the state. 
+/// State machine implementation through a single trait method called on an 
+/// encapsualted state. Each step, the method is called with the input and 
+/// current state, returning an action and possibly modifying the state. 
 /// 
 /// It is legal to operate the InternalStateMachine on a non-copy type, but 
 /// FiniteStateAutomaton is only implemented if the internal state is Copy,
 /// which implies that the state is self-contained. 
+/// 
+/// # Example
+/// ```
+/// use stackbt_automata_impl::automaton::Automaton;
+/// use stackbt_automata_impl::internal_state_machine::{
+///     InternalStateMachine, InternalTransition};
+/// 
+/// struct Counter;
+/// 
+/// impl InternalTransition for Counter {
+///     type Input = bool;
+///     type Internal = i64;
+///     type Action = i64;
+///     fn step(do_increment: &bool, state: &mut i64) -> i64 {
+///         if *do_increment {
+///             *state += 1;
+///         }
+///         *state
+///     }
+/// }
+/// 
+/// let mut count = InternalStateMachine::with(Counter, 0);
+/// assert_eq!(count.transition(&false), 0);
+/// assert_eq!(count.transition(&true), 1);
+/// assert_eq!(count.transition(&false), 1);
+/// ```
 #[derive(Copy, Clone)]
 pub struct InternalStateMachine<'k, C> where 
     C: InternalTransition + 'k
@@ -75,7 +100,7 @@ impl<'k, C> Automaton<'k> for InternalStateMachine<'k, C> where
 }
 
 impl<'k, C> FiniteStateAutomaton<'k> for InternalStateMachine<'k, C> where 
-    C: InternalTransition,
+    C: InternalTransition + Copy,
     C::Internal: Copy
 {}
 

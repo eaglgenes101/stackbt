@@ -17,6 +17,7 @@ use std::ops::Try;
 /// behavior tree nodes choose whether a particular state is nonterminal or 
 /// terminal, and to work with nonterminal or terminal states their children 
 /// have themselves chosen. 
+#[derive(Debug, PartialEq)]
 pub enum Statepoint<N, T> {
     /// A nonterminal state. 
     Nonterminal(N),
@@ -51,6 +52,7 @@ impl<N, T> Try for Statepoint<N, T> {
 /// is returned along with the modified behavior tree node, while at a terminal, 
 /// only the terminal decision point value is returned, with the node instance 
 /// dropped and never to return. 
+#[derive(Debug, PartialEq)]
 pub enum NodeResult<R, T, N> {
     /// A nonterminal state, along with the node itself. 
     Nonterminal(R, N),
@@ -88,20 +90,38 @@ pub trait BehaviorTreeNode {
     /// Type of the terminal statepoints returned. 
     type Terminal;
 
-    #[cfg(not(feature = "unsized_locals"))]
     /// Given the input, perform a single step of the behavior node, 
     /// either returning itself along with a nonterminal state, or returning 
     /// a terminal state. 
     fn step(self, input: &Self::Input) -> 
         NodeResult<Self::Nonterminal, Self::Terminal, Self> where 
         Self: Sized;
-
-    #[cfg(feature = "unsized_locals")]
-    /// Given the input, perform a single step of the behavior node, 
-    /// either returning itself along with a nonterminal state, or returning 
-    /// a terminal state. 
-    fn step(self, input: &Self::Input) -> 
-        NodeResult<Self::Nonterminal, Self::Terminal, Self>;
 }
 
+#[cfg(all(test, feature = "try_trait"))]
+mod tests_try {
+    use std::ops::Try;
 
+    #[test]
+    fn statepoint_try_test() {
+        use behavior_tree_node::Statepoint;
+        assert_eq!(Statepoint::Nonterminal::<i64, i64>(5).into_result(), 
+            Result::Ok(5));
+        assert_eq!(Statepoint::Terminal::<i64, i64>(5).into_result(), 
+            Result::Err(5));
+        assert_eq!(Statepoint::<i64, i64>::from_error(5), Statepoint::Terminal(5));
+        assert_eq!(Statepoint::<i64, i64>::from_ok(5), Statepoint::Nonterminal(5));
+    }
+    #[test]
+    fn node_result_try_test() {
+        use behavior_tree_node::NodeResult;
+        assert_eq!(NodeResult::Nonterminal::<i64, i64, i64>(5, 4).into_result(), 
+            Result::Ok((5, 4)));
+        assert_eq!(NodeResult::Terminal::<i64, i64, i64>(5).into_result(), 
+            Result::Err(5));
+        assert_eq!(NodeResult::<i64, i64, i64>::from_error(5), 
+            NodeResult::Terminal(5));
+        assert_eq!(NodeResult::<i64, i64, i64>::from_ok((5, 4)), 
+            NodeResult::Nonterminal(5, 4));
+    }
+}

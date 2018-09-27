@@ -19,6 +19,41 @@ pub trait DualTransition {
 /// RefStateMachine with the internal mutable state of InternalStateMachine. 
 /// This is the most general state machine form in this crate, but the other 
 /// two are generally easier to work with. 
+/// 
+/// # Example
+/// ```
+/// use stackbt_automata_impl::automaton::Automaton;
+/// use stackbt_automata_impl::dual_state_machine::{DualTransition, 
+///     DualStateMachine};
+/// 
+/// enum EvenTickCounter {
+///     Step,
+///     Pass
+/// }
+/// 
+/// impl DualTransition for EvenTickCounter {
+///     type Input = bool;
+///     type Internal = i64;
+///     type Action = i64;
+///     fn step(self, do_incr: &bool, state: &mut i64) -> (i64, Self) {
+///         match (self, *do_incr) {
+///             (EvenTickCounter::Step, true) => {
+///                 *state += 1;
+///                 (*state, EvenTickCounter::Pass)
+///             },
+///             (EvenTickCounter::Step, false) => (*state, EvenTickCounter::Pass),
+///             _ => (*state, EvenTickCounter::Step)
+///         }
+///     }
+/// }
+/// 
+/// let mut counter = DualStateMachine::new(EvenTickCounter::Step, 0);
+/// assert_eq!(counter.transition(&false), 0);
+/// assert_eq!(counter.transition(&true), 0);
+/// assert_eq!(counter.transition(&true), 1);
+/// assert_eq!(counter.transition(&false), 1);
+/// assert_eq!(counter.transition(&false), 1);
+/// ```
 #[derive(Copy, Clone)]
 pub struct DualStateMachine<'k, C> where 
     C: DualTransition + 'k

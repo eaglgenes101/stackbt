@@ -4,6 +4,27 @@ use std::iter::Iterator;
 /// The automaton trait is used to represent agents which, at a regular rate, 
 /// take input, process it, and return an action. Most of them also change 
 /// their internal state each transition. 
+/// 
+/// # Example
+/// ```
+/// use stackbt_automata_impl::automaton::Automaton;
+/// 
+/// // If you don't mind the opacity and the mutable reach of a mutable 
+/// // closure, you can whip up an automata quick and dirty on top of one. 
+/// let mut count = 0;
+/// let mut counter: Box<FnMut(&bool) -> i64> = Box::new(
+///     move |do_increment: &bool| {
+///         if *do_increment {
+///             count += 1;
+///         }
+///         count
+///     }
+/// );
+/// 
+/// assert_eq!(counter.transition(&false), 0);
+/// assert_eq!(counter.transition(&true), 1);
+/// assert_eq!(counter.transition(&false), 1);
+/// ```
 pub trait Automaton<'k> {
     /// The input type taken by the automaton. 
     type Input: 'k;
@@ -99,7 +120,7 @@ impl<'k, I, A> Automaton<'k> for [&'k mut dyn Automaton<'k, Input=I, Action=A>] 
 /// automata that are quite well behaved. In particular, they occupy fixed 
 /// memory, and thus do not need extra allocation to operate, and instances 
 /// with known type can be copied around freely. 
-pub trait FiniteStateAutomaton<'k>: Automaton<'k> {}
+pub trait FiniteStateAutomaton<'k>: Automaton<'k> + Copy {}
 
 #[cfg(test)]
 mod tests {

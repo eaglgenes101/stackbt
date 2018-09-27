@@ -20,8 +20,20 @@ pub trait ParallelDecider {
         Statepoint<Box<[Statepoint<Self::Nonterm, Self::Term>]>, Self::Exit>;
 }
 
-/// Parallel branch node, which is composed of a ParallelDecider on top of 
+/// A parallel branch node, which is composed of a ParallelDecider on top of 
 /// an automaton which returns boxed slices of statepoints. 
+/// 
+/// The idea is that the automaton this node is built on is a slice of 
+/// node runners which, each step, are all executed with the same input, 
+/// returning a boxed slice consisting of the statepoints reached by the 
+/// nodes. To this end, StackBT's automata_impl library automatically 
+/// implements the appropriate automaton trait on slices of automata which
+/// return the same inputs and actions. 
+/// 
+/// However, the automaton used does not need to be slices of node runners, 
+/// and this library does take advantage of this for testing by constructing 
+/// test parallel nodes upon internal state machines returning statepoint 
+/// slices. 
 pub struct ParallelBranchNode<C, D> where
     C: Automaton<'static, Input=D::Input, Action=Box<[Statepoint<D::Nonterm, 
         D::Term>]>>,

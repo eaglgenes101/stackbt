@@ -16,6 +16,7 @@ pub trait InputMachineMap {
 
 /// Wrapper for a automaton which converts between the provided input type
 /// and the input type expected by the automaton. 
+#[derive(Copy, Clone)]
 pub struct InputMappedMachine<'k, M, W> where
     M: Automaton<'k>,
     W: InputMachineMap<Out=M::Input>
@@ -70,7 +71,7 @@ impl<'k, M, W> Automaton<'k> for InputMappedMachine<'k, M, W> where
 
 impl<'k, M, W> FiniteStateAutomaton<'k> for InputMappedMachine<'k, M, W> where
     M: FiniteStateAutomaton<'k>,
-    W: InputMachineMap<Out=M::Input>
+    W: InputMachineMap<Out=M::Input> + Copy
 {}
 
 /// Mapping between different output types. 
@@ -88,6 +89,7 @@ pub trait OutputMachineMap {
 
 /// Wrapper for an automaton which converts between the actions emitted by the
 /// automaton and the ones exposed by the wrapper. 
+#[derive(Copy, Clone)]
 pub struct OutputMappedMachine<'k, M, W> where
     M: Automaton<'k>,
     W: OutputMachineMap<In=M::Action>
@@ -142,7 +144,7 @@ impl<'k, M, W> Automaton<'k> for OutputMappedMachine<'k, M, W> where
 
 impl<'k, M, W> FiniteStateAutomaton<'k> for OutputMappedMachine<'k, M, W> where
     M: FiniteStateAutomaton<'k>,
-    W: OutputMachineMap<In=M::Action> 
+    W: OutputMachineMap<In=M::Action> + Copy
 {}
 
 
@@ -157,6 +159,7 @@ pub trait LazyConstructor<'k> {
 /// Wrapper for for a machine, which defers initialization until the first 
 /// input is supplied, after which the machine is constructed using this input
 /// as a parameter. 
+#[derive(Copy, Clone)]
 pub struct LazyConstructedMachine<'k, M, C> where
     M: Automaton<'k>,
     C: LazyConstructor<'k, Creates=M>
@@ -233,7 +236,7 @@ impl<'k, M, C> Automaton<'k> for LazyConstructedMachine<'k, M, C> where
 
 impl<'k, M, C> FiniteStateAutomaton<'k> for LazyConstructedMachine<'k, M, C> where
     M: FiniteStateAutomaton<'k>,
-    C: LazyConstructor<'k, Creates=M>
+    C: LazyConstructor<'k, Creates=M> + Copy
 {}
 
 /// Eager constructor for an automaton. 
@@ -246,6 +249,7 @@ pub trait CustomConstructor<'k> {
 
 /// Wrapper for an automaton which designates a default constructor for that
 /// automaton, constructing it from the constructor. 
+#[derive(Copy, Clone)]
 pub struct CustomConstructedMachine<'k, M, C> where
     M: Automaton<'k>,
     C: CustomConstructor<'k, Creates=M>
@@ -309,7 +313,7 @@ impl<'k, M, C> Automaton<'k> for CustomConstructedMachine<'k, M, C> where
 
 impl<'k, M, C> FiniteStateAutomaton<'k> for CustomConstructedMachine<'k, M, C> where
     M: FiniteStateAutomaton<'k>,
-    C: CustomConstructor<'k, Creates=M>
+    C: CustomConstructor<'k, Creates=M> + Copy
 {}
 
 #[cfg(test)]

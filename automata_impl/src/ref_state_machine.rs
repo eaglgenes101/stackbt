@@ -13,9 +13,44 @@ pub trait ReferenceTransition {
     fn step(self, &Self::Input) -> (Self::Action, Self);
 }
 
-/// State machine implemented through a closure reference wrapper struct. 
-/// Each step, the currently referenced closure is called, returning an 
-/// action and a reference to the closure to call for the next step. 
+/// State machine implemented through a self-contained callable type. Each 
+/// step, the currently referenced callable is called, returning an action 
+/// and the new value to call for the next step. 
+/// 
+/// # Example
+/// ```
+/// use stackbt_automata_impl::automaton::Automaton;
+/// use stackbt_automata_impl::ref_state_machine::{ReferenceTransition, 
+///     RefStateMachine};
+/// 
+/// enum SRLatch {
+///     Low, 
+///     High
+/// }
+/// 
+/// impl ReferenceTransition for SRLatch {
+///     type Input = (bool, bool);
+///     type Action = bool;
+///     fn step(self, input: &(bool, bool)) -> (bool, Self) {
+///         match self {
+///             SRLatch::Low => match *input {
+///                 (_, true) => (false, SRLatch::High),
+///                 _ => (false, SRLatch::Low)
+///             },
+///             SRLatch::High => match *input {
+///                 (true, _) => (true, SRLatch::Low),
+///                 _ => (true, SRLatch::High)
+///             }
+///         }
+///     }
+/// }
+/// 
+/// let mut latch = RefStateMachine::new(SRLatch::Low);
+/// assert!(!latch.transition(&(true, false)));
+/// assert!(!latch.transition(&(false, true)));
+/// assert!(latch.transition(&(false, false)));
+/// assert!(latch.transition(&(true, true)));
+/// ```
 #[derive(Copy, Clone)]
 pub struct RefStateMachine<'k, C> where 
     C: ReferenceTransition + 'k

@@ -11,18 +11,18 @@ pub trait Enumerable: Copy + Sized {
 
 /// Trait for an enumeration of nodes, all of which have the same input, 
 /// nonterminals, and terminals. Each variant corresponds to a different 
-/// value of Enumeration. 
+/// possible subnode of the enumerable supernode. 
 pub trait EnumNode: BehaviorTreeNode {
     /// The type used to enumerate the variants of implementations of this 
-    /// trait. std::mem::Discriminant works for comparing variants of an enum, 
+    /// trait. std::mem::Discriminant works for comparing variants of an enum,
     /// but not for enumerating or matching against them, hence this 
     /// associated type. 
     type Discriminant: Enumerable;
 
-    /// Initialize a new node with discriminant with the given discriminant. 
+    /// Initialize a new node with the given discriminant value. 
     fn new(Self::Discriminant) -> Self;
 
-    /// Determine the discriminant of an enumerated node. 
+    /// Determine the discriminant of an existing enumerated node. 
     fn discriminant(&self) -> Self::Discriminant;
 }
 
@@ -76,6 +76,15 @@ pub trait SerialDecider {
         Self::Enum, Self::Term, Self::Exit>;
 }
 
+/// A serial branch node, which is composed of a SerialDecider on top of a 
+/// special enumerable node type. 
+/// 
+/// The idea behind this node is that the EnumNode trait describes the 
+/// possible subordinate nodes of this node, and that execution proceeds along
+/// one, before a new child node is switched to based on the current state and 
+/// the input, along which execution subsequently proceeds, and after some 
+/// time, a new node may be switched to or the whole parent node transitioned 
+/// from. 
 pub struct SerialBranchNode<E, D, X> where
     E: EnumNode,
     D: SerialDecider<Enum=E::Discriminant, Input=E::Input, Nonterm=E::Nonterminal, 

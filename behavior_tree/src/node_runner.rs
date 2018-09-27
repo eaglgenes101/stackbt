@@ -4,6 +4,7 @@ use stackbt_automata_impl::automaton::{Automaton, FiniteStateAutomaton};
 /// Automaton implementation which wraps a behavior tree node and forwards 
 /// input to it and transitions back from it, automatically restarting the
 /// node if it terminates. 
+#[derive(Copy, Clone)]
 pub struct NodeRunner<N> where 
     N: BehaviorTreeNode + 'static
 {
