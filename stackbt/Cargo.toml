@@ -6,9 +6,9 @@ readme = "README.md"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-stackbt_automata_impl = { path = "../automata_impl" }
-stackbt_behavior_tree = { path = "../behavior_tree" }
-stackbt_macros = { path = "../macros" }
+stackbt_automata_impl = { path = "../automata_impl", version = "^0.1.0"  }
+stackbt_behavior_tree = { path = "../behavior_tree", version = "^0.1.0"  }
+stackbt_macros = { path = "../macros", version = "^0.1.0"  }
 
 [features]
 default = []
