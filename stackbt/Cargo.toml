@@ -5,6 +5,7 @@ authors = ["eaglgenes101 <eaglgenes101@gmail.com>"]
 readme = "../README.md"
 license = "MIT/Apache-2.0"
 description = "A small collection of crates for game AI"
+repository = "https://github.com/eaglgenes101/stackbt"
 
 [dependencies]
 stackbt_automata_impl = { path = "../automata_impl", version = "^0.1.0"  }
