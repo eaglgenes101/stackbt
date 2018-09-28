@@ -17,6 +17,34 @@ pub trait WaitCondition {
 
 /// Node whose function is to stall within itself until a function of its 
 /// input return a terminal state, then terminates at that state. 
+/// 
+/// # Example
+/// ```
+/// use stackbt_behavior_tree::behavior_tree_node::{Statepoint, 
+///     BehaviorTreeNode, NodeResult};
+/// use stackbt_behavior_tree::base_nodes::{WaitCondition, PredicateWait};
+/// 
+/// struct Echoer;
+/// 
+/// impl WaitCondition for Echoer {
+///     type Input = Statepoint<(), ()>;
+///     type Nonterminal = ();
+///     type Terminal = ();
+///     fn do_end(input: &Statepoint<(), ()>) -> Statepoint<(), ()> {
+///         input.clone()
+///     }
+/// }
+/// 
+/// let echo_node_0 = PredicateWait::with(Echoer);
+/// let echo_node_1 = match echo_node_0.step(&Statepoint::Nonterminal(())) {
+///     NodeResult::Nonterminal(_, n) => n,
+///     _ => unreachable!("Node doesn't return terminal")
+/// };
+/// match echo_node_1.step(&Statepoint::Terminal(())) {
+///     NodeResult::Terminal(t) => (), //Expected case
+///     _ => unreachable!("Node doesn't return nonterminal")
+/// };
+/// ```
 pub struct PredicateWait<F> where 
     F: WaitCondition
 {
@@ -78,6 +106,28 @@ pub trait CallWrapper {
 
 /// Node which calls a function wrapper with its input, immediately 
 /// terminating with its return value. 
+/// # Example
+/// ```
+/// use stackbt_behavior_tree::behavior_tree_node::{Statepoint, 
+///     BehaviorTreeNode, NodeResult};
+/// use stackbt_behavior_tree::base_nodes::{CallWrapper, Evaluation};
+/// 
+/// struct IsThree;
+/// 
+/// impl CallWrapper for IsThree {
+///     type Input = ();
+///     type Output = i64;
+///     fn call(_input: &()) -> i64 {
+///         3
+///     }
+/// }
+/// 
+/// let three_node = Evaluation::with(IsThree);
+/// match three_node.step(&()) {
+///     NodeResult::Terminal(t) => assert_eq!(t, 3), //Expected case
+///     _ => unreachable!("Node doesn't return nonterminal")
+/// };
+/// ```
 pub struct Evaluation<F> where 
     F: CallWrapper
 {

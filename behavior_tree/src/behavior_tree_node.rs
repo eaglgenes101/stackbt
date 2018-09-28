@@ -5,7 +5,7 @@ use std::ops::Try;
 /// behavior tree nodes choose whether a particular state is nonterminal or 
 /// terminal, and to work with nonterminal or terminal states their children 
 /// have themselves chosen. 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Statepoint<N, T> {
     /// A nonterminal state. 
     Nonterminal(N),
@@ -40,7 +40,7 @@ impl<N, T> Try for Statepoint<N, T> {
 /// is returned along with the modified behavior tree node, while at a terminal, 
 /// only the terminal decision point value is returned, with the node instance 
 /// dropped and never to return. 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum NodeResult<R, T, N> {
     /// A nonterminal state, along with the node itself. 
     Nonterminal(R, N),
