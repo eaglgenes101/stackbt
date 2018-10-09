@@ -2,7 +2,7 @@ use automaton::{Automaton, FiniteStateAutomaton};
 use std::marker::PhantomData;
 
 /// Nonterminal pushdown transition for the pushdown automaton. 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum PushdownTransition<A, N> {
     /// Push a new frame onto the pushdown stack. 
     Push(A, N),
@@ -13,7 +13,7 @@ pub enum PushdownTransition<A, N> {
 }
 
 /// Terminal pushdown transition for the pushdown automaton. 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)] 
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum TerminalTransition<A, N> {
     /// Push a new frame onto the pushdown stack. 
     Push(A, N),
@@ -25,6 +25,7 @@ pub enum TerminalTransition<A, N> {
 /// machines. Somewhat more powerful than state machines, but in return, 
 /// requires some allocable space and some extra tolerance for amortized 
 /// runtime costs. 
+#[derive(Clone, PartialEq, Debug)]
 pub struct PushdownAutomaton <'k, I, A, N, T> where 
     I: 'k,
     N: FiniteStateAutomaton<'k, Input=I, Action=PushdownTransition<A, N>> + 'k,
@@ -138,9 +139,9 @@ mod test {
         type Input = i64;
         type Action = TerminalTransition<i64, 
             InternalStateMachine<'static, NonterminalFunction>>;
-        fn step (new: &i64, internal: &mut i64) -> Self::Action {
+        fn step (&self, new: &i64, internal: &mut i64) -> Self::Action {
             if *new == 0 {
-                TerminalTransition::Push(*internal, InternalStateMachine::with(
+                TerminalTransition::Push(*internal, InternalStateMachine::new(
                     NonterminalFunction, 
                     0
                 ))
@@ -157,9 +158,9 @@ mod test {
         type Input = i64;
         type Action = PushdownTransition<i64, 
             InternalStateMachine<'static, NonterminalFunction>>;
-        fn step (new: &i64, internal: &mut i64) -> Self::Action {
+        fn step (&self, new: &i64, internal: &mut i64) -> Self::Action {
             if *new == 0 {
-                PushdownTransition::Push(*internal, InternalStateMachine::with(
+                PushdownTransition::Push(*internal, InternalStateMachine::new(
                     NonterminalFunction, 
                     0
                 ))
@@ -177,7 +178,7 @@ mod test {
     fn check_def () {
         //from_iterable constructor used to assist type inference
         let mut test_pushdown = PushdownAutomaton::from_iterable(
-            InternalStateMachine::with(TerminalFunction, 0),
+            InternalStateMachine::new(TerminalFunction, 0),
             Vec::<InternalStateMachine<NonterminalFunction>>::new()
         );
         // 0|

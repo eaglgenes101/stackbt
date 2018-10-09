@@ -15,6 +15,38 @@ pub trait DualTransition {
     fn step(self, &Self::Input, &mut Self::Internal) -> (Self::Action, Self);
 }
 
+/// Type which exists to make utilizing closures with internal state machines
+/// that much more possible. 
+pub struct DualTransClosure<I, N, A, C> where 
+    C: FnMut(&I, &mut N) -> A
+{
+    closure: C,
+    _junk: PhantomData<(I, N, A)>
+}
+
+impl<I, N, A, C> DualTransClosure<I, N, A, C> where 
+    C: FnMut(&I, &mut N) -> A
+{
+    fn new(closure: C) -> DualTransClosure<I, N, A, C> {
+        DualTransClosure {
+            closure: closure,
+            _junk: PhantomData
+        }
+    }
+}
+
+impl<I, N, A, C> DualTransition for DualTransClosure<I, N, A, C> where 
+    C: FnMut(&I, &mut N) -> A
+{
+    type Input = I;
+    type Internal = N;
+    type Action = A;
+    fn step(self, input: &I, internal: &mut N) -> (A, Self) {
+        let mut mut_self = self;
+        ((mut_self.closure)(input, internal), mut_self)
+    }
+}
+
 /// State machine implementation which combines the changing functions of 
 /// RefStateMachine with the internal mutable state of InternalStateMachine. 
 /// This is the most general state machine form in this crate, but the other 
@@ -54,7 +86,7 @@ pub trait DualTransition {
 /// assert_eq!(counter.transition(&false), 1);
 /// assert_eq!(counter.transition(&false), 1);
 /// ```
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct DualStateMachine<'k, C> where 
     C: DualTransition + 'k
 {
@@ -75,6 +107,20 @@ impl<'k, C> DualStateMachine<'k, C> where
         }
     }
 }
+
+impl<'k, I, N, A, C> DualStateMachine<'k, DualTransClosure<I, N, A, C>> where 
+    C: FnMut(&I, &mut N) -> A
+{
+    /// Create a new internal state machine from a closure. 
+    pub fn with(init: C, init_state: N) -> DualStateMachine<'k, 
+        DualTransClosure<I, N, A, C>> 
+    {
+        DualStateMachine::new(
+            DualTransClosure::new(init),
+            init_state
+        )
+    }
+} 
 
 impl<'k, C> Default for DualStateMachine<'k, C> where
     C: DualTransition + Default + 'k,

@@ -8,9 +8,18 @@ description = "A small collection of crates for game AI"
 repository = "https://github.com/eaglgenes101/stackbt"
 
 [dependencies]
-stackbt_automata_impl = { path = "../automata_impl", version = "^0.1.2"  }
-stackbt_behavior_tree = { path = "../behavior_tree", version = "^0.1.2"  }
-stackbt_macros = { path = "../macros", version = "^0.1.2"  }
+stackbt_automata_impl = { path = "../automata_impl", version = "^0.1.2" }
+stackbt_behavior_tree = { path = "../behavior_tree", version = "^0.1.2" }
+stackbt_macros = { path = "../macros", version = "^0.1.2" }
+num-derive = "0.2.2"
+num-traits = "0.2.6"
+
+[dev-dependencies]
+amethyst = { version = "0.8.0", features = ["nightly"] }
+nalgebra = "0.16.0"
+ncollide2d = "0.17.0"
+lazy_static = "1.1.0"
+rand = "0.5.5"
 
 [features]
 default = []

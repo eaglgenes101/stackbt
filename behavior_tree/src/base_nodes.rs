@@ -12,7 +12,16 @@ pub trait WaitCondition {
     type Terminal;
     /// Given the input, determine whether to return a nonterminal state, or 
     /// a terminal state. 
-    fn do_end(&Self::Input) -> Statepoint<Self::Nonterminal, Self::Terminal>;
+    fn do_end(&self, &Self::Input) -> Statepoint<Self::Nonterminal, Self::Terminal>;
+}
+
+impl<I, N, T> WaitCondition for Fn(&I) -> Statepoint<N, T> {
+    type Input = I;
+    type Nonterminal = N;
+    type Terminal = T;
+    fn do_end(&self, input: &I) -> Statepoint<N, T> {
+        self(input)
+    }
 }
 
 /// Node whose function is to stall within itself until a function of its 
@@ -45,36 +54,29 @@ pub trait WaitCondition {
 ///     _ => unreachable!("Node doesn't return nonterminal")
 /// };
 /// ```
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct PredicateWait<F> where 
     F: WaitCondition
 {
-    _who_cares: PhantomData<F>
+    condition: F
 }
 
 impl<F> PredicateWait<F> where 
     F: WaitCondition
 {
     /// Create a new predicate wait node. 
-    pub fn new() -> PredicateWait<F> {
+    pub fn new(cond: F) -> PredicateWait<F> {
         PredicateWait {
-            _who_cares: PhantomData
-        }
-    }
-
-    /// Create a new predicate wait node, using a dummy object to supply 
-    /// the type of the waiting predicate. 
-    pub fn with(_type_helper: F) -> PredicateWait<F> {
-        PredicateWait {
-            _who_cares: PhantomData
+            condition: cond
         }
     }
 }
 
 impl<F> Default for PredicateWait<F> where 
-    F: WaitCondition
+    F: WaitCondition + Default
 {
     fn default() -> PredicateWait<F> {
-        PredicateWait::new()
+        PredicateWait::new(F::default())
     }
 }
 
@@ -87,7 +89,7 @@ impl<F> BehaviorTreeNode for PredicateWait<F> where
 
     #[inline]
     fn step(self, input: &F::Input) -> NodeResult<F::Nonterminal, F::Terminal, Self> {
-        match F::do_end(input) {
+        match self.condition.do_end(input) {
             Statepoint::Terminal(t) => NodeResult::Terminal(t),
             Statepoint::Nonterminal(n) => NodeResult::Nonterminal(n, self)
         }
@@ -101,7 +103,15 @@ pub trait CallWrapper {
     /// Type of the output to return. 
     type Output;
     /// Given the input, determine the value to immediately terminate with. 
-    fn call(&Self::Input) -> Self::Output;
+    fn call(&self, &Self::Input) -> Self::Output;
+}
+
+impl<I, O> CallWrapper for Fn(&I) -> O {
+    type Input = I;
+    type Output = O;
+    fn call(&self, input: &I) -> O {
+        self(input)
+    }
 }
 
 /// Node which calls a function wrapper with its input, immediately 
@@ -128,36 +138,29 @@ pub trait CallWrapper {
 ///     _ => unreachable!("Node doesn't return nonterminal")
 /// };
 /// ```
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Evaluation<F> where 
     F: CallWrapper
 {
-    _who_cares: PhantomData<F>
+    to_call: F
 }
 
 impl<F> Evaluation<F> where 
     F: CallWrapper
 {
     /// Create a new evaluation node. 
-    pub fn new() -> Evaluation<F> {
+    pub fn new(to_call: F) -> Evaluation<F> {
         Evaluation {
-            _who_cares: PhantomData
-        }
-    }
-
-    /// Create a new evaluation node, using a dummy object to supply the type
-    /// of the function wrapper. 
-    pub fn with(_type_helper: F) -> Evaluation<F> {
-        Evaluation {
-            _who_cares: PhantomData
+            to_call
         }
     }
 }
 
 impl<F> Default for Evaluation<F> where 
-    F: CallWrapper
+    F: CallWrapper + Default
 {
     fn default() -> Evaluation<F> {
-        Evaluation::new()
+        Evaluation::new(F::default())
     }
 }
 
@@ -170,11 +173,12 @@ impl<F> BehaviorTreeNode for Evaluation<F> where
 
     #[inline]
     fn step(self, input: &F::Input) -> NodeResult<(), F::Output, Self> {
-        NodeResult::Terminal(F::call(input))
+        NodeResult::Terminal(self.to_call.call(input))
     }
 }
 
 /// Node wrapper for an automaton. 
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct MachineWrapper<M, N, T> where 
     M: Automaton<'static, Action=Statepoint<N, T>> + 'static
 {
@@ -237,7 +241,7 @@ mod tests {
         type Input = i64;
         type Nonterminal = ();
         type Terminal = ();
-        fn do_end(i: &i64) -> Statepoint<(), ()> {
+        fn do_end(&self, i: &i64) -> Statepoint<(), ()> {
             if *i == 0 {
                 Statepoint::Terminal(())
             } else {
@@ -250,7 +254,7 @@ mod tests {
     fn pred_wait_test() {
         use behavior_tree_node::{BehaviorTreeNode, NodeResult};
         use base_nodes::PredicateWait;
-        let thing = PredicateWait::with(ThingPred);
+        let thing = PredicateWait::new(ThingPred);
         let thing_1 = match thing.step(&4) {
             NodeResult::Nonterminal(_, x) => x,
             _ => unreachable!("Expected nonterminal state")
@@ -266,7 +270,7 @@ mod tests {
     impl CallWrapper for EvaluationValue {
         type Input = i64;
         type Output = i64;
-        fn call(val: &i64) -> i64 {
+        fn call(&self, val: &i64) -> i64 {
             *val
         }
     }
@@ -275,7 +279,7 @@ mod tests {
     fn evaluation_test() {
         use behavior_tree_node::{BehaviorTreeNode, NodeResult};
         use base_nodes::Evaluation;
-        let thing = Evaluation::with(EvaluationValue);
+        let thing = Evaluation::new(EvaluationValue);
         match thing.step(&5) {
             NodeResult::Terminal(t) => assert!(t == 5),
             _ => unreachable!("Expected terminal"),
@@ -290,7 +294,7 @@ mod tests {
         type Input = i64;
         type Action = Statepoint<i64, i64>;
 
-        fn step(increment: &i64, accumulator: &mut i64) -> Statepoint<i64, i64> {
+        fn step(&self, increment: &i64, accumulator: &mut i64) -> Statepoint<i64, i64> {
             if *increment == 0 {
                 Statepoint::Terminal(*accumulator)
             } else {
@@ -312,7 +316,7 @@ mod tests {
         use behavior_tree_node::{BehaviorTreeNode, NodeResult};
         use stackbt_automata_impl::internal_state_machine::InternalStateMachine;
         use base_nodes::MachineWrapper;
-        let machine = InternalStateMachine::with(ThingLeaf, 0);
+        let machine = InternalStateMachine::new(ThingLeaf, 0);
         let thing = MachineWrapper::new(machine);
         let thing_1 = match thing.step(&4) {
             NodeResult::Nonterminal(a, b) => {

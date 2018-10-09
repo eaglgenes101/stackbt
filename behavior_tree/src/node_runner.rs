@@ -4,7 +4,7 @@ use stackbt_automata_impl::automaton::{Automaton, FiniteStateAutomaton};
 /// Automaton implementation which wraps a behavior tree node and forwards 
 /// input to it and transitions back from it, automatically restarting the
 /// node if it terminates. 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct NodeRunner<N> where 
     N: BehaviorTreeNode + 'static
 {
@@ -70,7 +70,7 @@ mod tests {
         type Input = i64;
         type Nonterminal = ();
         type Terminal = ();
-        fn do_end(i: &i64) -> Statepoint<(), ()> {
+        fn do_end(&self, i: &i64) -> Statepoint<(), ()> {
             if *i == 0 {
                 Statepoint::Terminal(())
             } else {
@@ -84,7 +84,7 @@ mod tests {
         use stackbt_automata_impl::automaton::Automaton;
         use base_nodes::PredicateWait;
         use node_runner::NodeRunner;
-        let node = PredicateWait::with(ThingPred);
+        let node = PredicateWait::new(ThingPred);
         let mut machine = NodeRunner::new(node);
         match machine.transition(&1) {
             Statepoint::Nonterminal(_) => (),

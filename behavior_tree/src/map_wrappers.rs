@@ -11,17 +11,18 @@ pub trait InputNodeMap {
     type Out;
     /// Map between the input supplied and the output to feed into the 
     /// enclosed behavior tree node. 
-    fn input_transform(&Self::In) -> Self::Out;
+    fn input_transform(&self, &Self::In) -> Self::Out;
 }
 
 /// Wrapper for a node which converts between the provided input type and 
 /// the input type expected by the node. 
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct InputMappedNode<N, M> where 
     N: BehaviorTreeNode,
     M: InputNodeMap<Out=N::Input> 
 {
     node: N,
-    _exists_tuple: PhantomData<M>
+    mapper: M
 }
 
 impl<N, M> InputMappedNode<N, M> where
@@ -29,29 +30,20 @@ impl<N, M> InputMappedNode<N, M> where
     M: InputNodeMap<Out=N::Input>
 {
     /// Create a new input mapped node. 
-    pub fn new(node: N) -> InputMappedNode<N, M> {
+    pub fn new(mapper: M, node: N) -> InputMappedNode<N, M> {
         InputMappedNode {
             node,
-            _exists_tuple: PhantomData
-        }
-    }
-
-    /// Create an new input mapped node, using a dummy object to supply the 
-    /// type of the wrapper. 
-    pub fn with(_type_helper: M, node: N) -> InputMappedNode<N, M> {
-        InputMappedNode {
-            node,
-            _exists_tuple: PhantomData
+            mapper
         }
     }
 }
 
 impl<N, M> Default for InputMappedNode<N, M> where
     N: BehaviorTreeNode + Default,
-    M: InputNodeMap<Out=N::Input>
+    M: InputNodeMap<Out=N::Input> + Default
 {
     fn default() -> InputMappedNode<N, M> {
-        InputMappedNode::new(N::default())
+        InputMappedNode::new(M::default(), N::default())
     }
 }
 
@@ -65,10 +57,10 @@ impl<N, M> BehaviorTreeNode for InputMappedNode<N, M> where
 
     #[inline]
     fn step(self, input: &M::In) -> NodeResult<N::Nonterminal, N::Terminal, Self> {
-        match self.node.step(&M::input_transform(input)) {
+        match self.node.step(&self.mapper.input_transform(input)) {
             NodeResult::Nonterminal(n, m) => NodeResult::Nonterminal(
                 n,
-                InputMappedNode::new(m)
+                InputMappedNode::new(self.mapper, m)
             ),
             NodeResult::Terminal(t) => NodeResult::Terminal(t)
         }
@@ -90,20 +82,63 @@ pub trait OutputNodeMap {
     type TermOut;
     /// Map between the nonterminal input returned by the automaton and the 
     /// nonterminal output to return. 
-    fn nonterminal_transform(Self::NontermIn) -> Self::NontermOut;
+    fn nonterminal_transform(&self, Self::NontermIn) -> Self::NontermOut;
     /// Map between the terminal input returned by the automaton and the 
     /// terminal output to return. 
-    fn terminal_transform(Self::TermIn) -> Self::TermOut;
+    fn terminal_transform(&self, Self::TermIn) -> Self::TermOut;
+}
+
+/// Convenient wrapper for two closures which together cover the nonterminal 
+/// and terminal cases of the output map. 
+pub struct OutputMapStruct<M, N, S, T, P, Q> where 
+    P: Fn(M) -> N,
+    Q: Fn(S) -> T
+{
+    nonterm_map: P,
+    term_map: Q,
+    _exists_tuple: PhantomData<(M, N, S, T)>
+}
+
+impl<M, N, S, T, P, Q> OutputMapStruct<M, N, S, T, P, Q> where 
+    P: Fn(M) -> N,
+    Q: Fn(S) -> T
+{
+    pub fn new(nonterm_map: P, term_map: Q) -> OutputMapStruct<M, N, S, T, P, Q> {
+        OutputMapStruct {
+            nonterm_map,
+            term_map,
+            _exists_tuple: PhantomData
+        }
+    }
+}
+
+impl<M, N, S, T, P, Q> OutputNodeMap for OutputMapStruct<M, N, S, T, P, Q> where 
+    P: Fn(M) -> N,
+    Q: Fn(S) -> T
+{
+    type NontermIn = M;
+    type NontermOut = N;
+    type TermIn = S;
+    type TermOut = T;
+
+    fn nonterminal_transform(&self, input: M) -> N {
+        (self.nonterm_map)(input)
+    }
+
+    fn terminal_transform(&self, input: S) -> T {
+        (self.term_map)(input)
+    }
 }
 
 /// Wrapper for a node which converts between the statepoints emitted by the 
 /// node and the ones exposed by the wrapper. 
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct OutputMappedNode<N, M> where
     N: BehaviorTreeNode,
     M: OutputNodeMap<NontermIn = N::Nonterminal, TermIn = N::Terminal>
 {
     node: N,
-    _exists_tuple: PhantomData<M>
+    mapper: M
 }
 
 impl<N, M> OutputMappedNode<N, M> where
@@ -111,29 +146,20 @@ impl<N, M> OutputMappedNode<N, M> where
     M: OutputNodeMap<NontermIn = N::Nonterminal, TermIn = N::Terminal>
 {
     /// Create an new output mapped node. 
-    pub fn new(node: N) -> OutputMappedNode<N, M> {
+    pub fn new(mapper: M, node: N) -> OutputMappedNode<N, M> {
         OutputMappedNode {
             node,
-            _exists_tuple: PhantomData
-        }
-    }
-
-    /// Create an new output mapped node, using a dummy object to supply the 
-    /// type of the wrapper. 
-    pub fn with(_type_helper: M, node: N) -> OutputMappedNode<N, M> {
-        OutputMappedNode {
-            node,
-            _exists_tuple: PhantomData
+            mapper
         }
     }
 }
 
 impl<N, M> Default for OutputMappedNode<N, M> where
     N: BehaviorTreeNode + Default,
-    M: OutputNodeMap<NontermIn = N::Nonterminal, TermIn = N::Terminal>
+    M: OutputNodeMap<NontermIn = N::Nonterminal, TermIn = N::Terminal> + Default
 {
     fn default() -> OutputMappedNode<N, M> {
-        OutputMappedNode::new(N::default())
+        OutputMappedNode::new(M::default(), N::default())
     }
 }
 
@@ -149,11 +175,11 @@ impl<N, M> BehaviorTreeNode for OutputMappedNode<N, M> where
     fn step(self, input: &N::Input) -> NodeResult<M::NontermOut, M::TermOut, Self> {
         match self.node.step(input) {
             NodeResult::Nonterminal(n, m) => NodeResult::Nonterminal(
-                M::nonterminal_transform(n),
-                OutputMappedNode::new(m)
+                self.mapper.nonterminal_transform(n),
+                OutputMappedNode::new(self.mapper, m)
             ),
             NodeResult::Terminal(t) => NodeResult::Terminal(
-                M::terminal_transform(t)
+                self.mapper.terminal_transform(t)
             )
         }
     }
@@ -164,18 +190,27 @@ pub trait LazyConstructor {
     /// Type of the behavior tree node to create. 
     type Creates: BehaviorTreeNode;
     /// Create a new behavior tree node. 
-    fn create(&<Self::Creates as BehaviorTreeNode>::Input) -> Self::Creates;
+    fn create(&self, &<Self::Creates as BehaviorTreeNode>::Input) -> Self::Creates;
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+enum LazyConstructedInner<N, M> where
+    N: BehaviorTreeNode,
+    M: LazyConstructor<Creates=N>
+{
+    Node(N),
+    Pending(M)
 }
 
 /// Wrapper for for a node, which defers initialization until the first input 
 /// is supplied, after which the node is constructed using this input as a 
 /// parameter. 
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct LazyConstructedNode<N, M> where
     N: BehaviorTreeNode,
     M: LazyConstructor<Creates=N>
 {
-    node: Option<N>,
-    _exists_tuple: PhantomData<M>
+    inside: Option<LazyConstructedInner<N, M>>
 }
 
 impl<N, M> LazyConstructedNode<N, M> where
@@ -183,19 +218,9 @@ impl<N, M> LazyConstructedNode<N, M> where
     M: LazyConstructor<Creates=N>
 {
     /// Create a new lazily constructed behavior tree node. 
-    pub fn new() -> LazyConstructedNode<N, M> {
+    pub fn new(maker: M) -> LazyConstructedNode<N, M> {
         LazyConstructedNode{
-            node: Option::None,
-            _exists_tuple: PhantomData
-        }
-    }
-
-    /// Create a new lazily constructed behavior tree node, using a dummy 
-    /// object to supply type of the constructor. 
-    pub fn with(_type_assist: M) -> LazyConstructedNode<N, M> {
-        LazyConstructedNode{
-            node: Option::None,
-            _exists_tuple: PhantomData
+            inside: Option::Some(LazyConstructedInner::Pending(maker))
         }
     }
 
@@ -203,18 +228,17 @@ impl<N, M> LazyConstructedNode<N, M> where
     /// wrapper.
     pub fn from_existing(node: N) -> LazyConstructedNode<N, M> {
         LazyConstructedNode {
-            node: Option::Some(node),
-            _exists_tuple: PhantomData
+            inside: Option::Some(LazyConstructedInner::Node(node))
         }
     }
 }
 
 impl<N, M> Default for LazyConstructedNode<N, M> where
     N: BehaviorTreeNode,
-    M: LazyConstructor<Creates=N>
+    M: LazyConstructor<Creates=N> + Default
 {
     fn default() -> LazyConstructedNode<N, M> {
-        LazyConstructedNode::new()
+        LazyConstructedNode::new(M::default())
     }
 }
 
@@ -228,14 +252,15 @@ impl<N, M> BehaviorTreeNode for LazyConstructedNode<N, M> where
 
     #[inline]
     fn step(self, input: &N::Input) -> NodeResult<N::Nonterminal, N::Terminal, Self> {
-        let node = if let Option::Some(n) = self.node {
-            n
-        } else {
-            M::create(input)
+        let mut mut_self = self;
+        let node = match mut_self.inside.take().unwrap() {
+            LazyConstructedInner::Node(n) => n,
+            LazyConstructedInner::Pending(c) => c.create(input)
         };
         match node.step(input) {
-            NodeResult::Nonterminal(n, i) => NodeResult::Nonterminal(
-                n, LazyConstructedNode::from_existing(i)
+            NodeResult::Nonterminal(v, n) => NodeResult::Nonterminal(
+                v,
+                LazyConstructedNode::from_existing(n)
             ),
             NodeResult::Terminal(t) => NodeResult::Terminal(t)
         }
@@ -247,11 +272,12 @@ pub trait CustomConstructor {
     /// Type of the behavior tree node to create. 
     type Creates: BehaviorTreeNode;
     /// Create a new behavior tree node. 
-    fn create() -> Self::Creates;
+    fn create(&self) -> Self::Creates;
 }
 
 /// Wrapper for a node which designates a default constructor for that node, 
 /// constructing it from the constructor. 
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct CustomConstructedNode<N, M> where
     N: BehaviorTreeNode,
     M: CustomConstructor<Creates=N>
@@ -265,9 +291,9 @@ impl<N, M> CustomConstructedNode<N, M> where
     M: CustomConstructor<Creates=N>
 {
     /// Create a new custom constructed behavior tree node. 
-    pub fn new() -> CustomConstructedNode<N, M> {
+    pub fn new(constructor: &M) -> CustomConstructedNode<N, M> {
         CustomConstructedNode {
-            node: M::create(),
+            node: constructor.create(),
             _exists_tuple: PhantomData
         }
     }
@@ -280,23 +306,14 @@ impl<N, M> CustomConstructedNode<N, M> where
             _exists_tuple: PhantomData
         }
     }
-
-    /// Wrap an existing behavior tree node in the custom constructed node
-    /// wrapper.
-    pub fn with(_type_assist: M) -> CustomConstructedNode<N, M> {
-        CustomConstructedNode {
-            node: M::create(),
-            _exists_tuple: PhantomData
-        }
-    }
 }
 
 impl<N, M> Default for CustomConstructedNode<N, M> where
     N: BehaviorTreeNode,
-    M: CustomConstructor<Creates=N>
+    M: CustomConstructor<Creates=N> + Default
 {
     fn default() -> CustomConstructedNode<N, M> {
-        CustomConstructedNode::new()
+        CustomConstructedNode::new(&M::default())
     }
 }
 
@@ -333,7 +350,7 @@ mod tests {
         type Input = i64;
         type Nonterminal = i64;
         type Terminal = i64;
-        fn do_end(input: &i64) -> Statepoint<i64, i64> {
+        fn do_end(&self, input: &i64) -> Statepoint<i64, i64> {
             if *input > 0 {
                 Statepoint::Nonterminal(*input)
             } else {
@@ -347,7 +364,7 @@ mod tests {
     impl InputNodeMap for InMap {
         type In = i64;
         type Out = i64;
-        fn input_transform(input: &i64) -> i64 {
+        fn input_transform(&self, input: &i64) -> i64 {
             -input
         }
     }
@@ -355,8 +372,8 @@ mod tests {
     #[test]
     fn input_map_test() {
         use map_wrappers::InputMappedNode;
-        let base_node = PredicateWait::with(Echoer);
-        let wrapped_node = InputMappedNode::with(InMap, base_node);
+        let base_node = PredicateWait::new(Echoer);
+        let wrapped_node = InputMappedNode::new(InMap, base_node);
         let wrapped_node_1 = match wrapped_node.step(&-5) {
             NodeResult::Nonterminal(v, m) => {
                 assert_eq!(v, 5);
@@ -377,11 +394,11 @@ mod tests {
         type NontermOut = i64;
         type TermIn = i64;
         type TermOut = i64;
-        fn nonterminal_transform(val: i64) -> i64 {
+        fn nonterminal_transform(&self, val: i64) -> i64 {
             val + 1
         }
 
-        fn terminal_transform(val: i64) -> i64 {
+        fn terminal_transform(&self, val: i64) -> i64 {
             val - 1
         }
     }
@@ -389,8 +406,8 @@ mod tests {
     #[test]
     fn output_map_test() {
         use map_wrappers::OutputMappedNode;
-        let base_node = PredicateWait::with(Echoer);
-        let wrapped_node = OutputMappedNode::with(OutMap, base_node);
+        let base_node = PredicateWait::new(Echoer);
+        let wrapped_node = OutputMappedNode::new(OutMap, base_node);
         let wrapped_node_1 = match wrapped_node.step(&5) {
             NodeResult::Nonterminal(v, m) => {
                 assert_eq!(v, 6);
@@ -412,7 +429,7 @@ mod tests {
         type Internal = i64;
         type Action = Statepoint<i64, i64>;
 
-        fn step(input: &i64, state: &mut i64) -> Statepoint<i64, i64> {
+        fn step(&self, input: &i64, state: &mut i64) -> Statepoint<i64, i64> {
             if *input > 0 {
                 Statepoint::Nonterminal(*state)
             } else {
@@ -428,15 +445,15 @@ mod tests {
         type Creates = MachineWrapper<InternalStateMachine<'static,
             IndefinitePlayback>, i64, i64>;
 
-        fn create(input: &i64) -> Self::Creates {
-            MachineWrapper::new(InternalStateMachine::with(IndefinitePlayback, *input))
+        fn create(&self, input: &i64) -> Self::Creates {
+            MachineWrapper::new(InternalStateMachine::new(IndefinitePlayback, *input))
         }
     }
 
     #[test]
     fn lazy_constructor_test() {
         use map_wrappers::LazyConstructedNode;
-        let new_node = LazyConstructedNode::with(LazyWrapper);
+        let new_node = LazyConstructedNode::new(LazyWrapper);
         let new_node_1 = match new_node.step(&2) {
             NodeResult::Nonterminal(x, y) => {
                 assert_eq!(x, 2);
@@ -448,7 +465,7 @@ mod tests {
             NodeResult::Nonterminal(x, _) => assert_eq!(x, 2),
             _ => unreachable!("Expected nonterminal state")
         };
-        let new_node_2 = LazyConstructedNode::with(LazyWrapper);
+        let new_node_2 = LazyConstructedNode::new(LazyWrapper);
         let new_node_3 = match new_node_2.step(&5) {
             NodeResult::Nonterminal(x, y) => {
                 assert_eq!(x, 5);
@@ -468,14 +485,15 @@ mod tests {
     {
         type Creates = MachineWrapper<InternalStateMachine<'static,
             IndefinitePlayback>, i64, i64>;
-        fn create() -> Self::Creates {
-            MachineWrapper::new(InternalStateMachine::with(IndefinitePlayback, 12))
+        fn create(&self) -> Self::Creates {
+            MachineWrapper::new(InternalStateMachine::new(IndefinitePlayback, 12))
         }
     }
+    
     #[test]
     fn custom_constructor_test() {
         use map_wrappers::CustomConstructedNode;
-        let new_node = CustomConstructedNode::with(FixedWrapper);
+        let new_node = CustomConstructedNode::new(&FixedWrapper);
         match new_node.step(&2) {
             NodeResult::Nonterminal(x, _) => assert_eq!(x, 12),
             _ => unreachable!("Expected nonterminal state")

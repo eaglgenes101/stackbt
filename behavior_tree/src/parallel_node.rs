@@ -1,5 +1,4 @@
 use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
-use std::marker::PhantomData;
 use stackbt_automata_impl::automaton::Automaton;
 
 /// Parallel decider, which given the input and a slice of statepoints, 
@@ -16,7 +15,7 @@ pub trait ParallelDecider {
     type Exit;
     /// Given the input and the boxed statepoint slice, return a statepoint 
     /// of either that boxed statepoint slice or a terminal value. 
-    fn each_step(&Self::Input, Box<[Statepoint<Self::Nonterm, Self::Term>]>) -> 
+    fn each_step(&self, &Self::Input, Box<[Statepoint<Self::Nonterm, Self::Term>]>) -> 
         Statepoint<Box<[Statepoint<Self::Nonterm, Self::Term>]>, Self::Exit>;
 }
 
@@ -34,13 +33,14 @@ pub trait ParallelDecider {
 /// and this library does take advantage of this for testing by constructing 
 /// test parallel nodes upon internal state machines returning statepoint 
 /// slices. 
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct ParallelBranchNode<C, D> where
     C: Automaton<'static, Input=D::Input, Action=Box<[Statepoint<D::Nonterm, 
         D::Term>]>>,
     D: ParallelDecider
 {
     collection: C,
-    _exists_tuple: PhantomData<D>
+    decider: D
 }
 
 impl<C, D> ParallelBranchNode<C, D> where
@@ -49,10 +49,10 @@ impl<C, D> ParallelBranchNode<C, D> where
     D: ParallelDecider
 {
     /// Create a new parallel branch node. 
-    pub fn new(machine: C) -> ParallelBranchNode<C, D> {
+    pub fn new(decider: D, machine: C) -> ParallelBranchNode<C, D> {
         ParallelBranchNode {
             collection: machine,
-            _exists_tuple: PhantomData
+            decider: decider
         }
     }
 }
@@ -60,10 +60,10 @@ impl<C, D> ParallelBranchNode<C, D> where
 impl<C, D> Default for ParallelBranchNode<C, D> where
     C: Automaton<'static, Input=D::Input, Action=Box<[Statepoint<D::Nonterm, 
         D::Term>]>> + Default,
-    D: ParallelDecider
+    D: ParallelDecider + Default
 {
     fn default() -> ParallelBranchNode<C, D> {
-        ParallelBranchNode::new(C::default())
+        ParallelBranchNode::new(D::default(), C::default())
     }
 }
 
@@ -80,11 +80,11 @@ impl<C, D> BehaviorTreeNode for ParallelBranchNode<C, D> where
     fn step(self, input: &C::Input) -> NodeResult<Self::Nonterminal, D::Exit, Self> {
         let mut coll = self.collection;
         let results = coll.transition(input);
-        let decision = D::each_step(input, results);
+        let decision = self.decider.each_step(input, results);
         match decision {
             Statepoint::Nonterminal(ret) => NodeResult::Nonterminal(
                 ret,
-                Self::new(coll)
+                Self::new(self.decider, coll)
             ),
             Statepoint::Terminal(t) => NodeResult::Terminal(t)
         }
@@ -109,7 +109,7 @@ mod tests {
         type Internal = i64;
         type Action = Statepoint<i64, i64>;
 
-        fn step(input: &i64, state: &mut i64) -> Statepoint<i64, i64> {
+        fn step(&self, input: &i64, state: &mut i64) -> Statepoint<i64, i64> {
             if *input > 0 {
                 *state += 1;
                 Statepoint::Nonterminal(*state)
@@ -136,7 +136,7 @@ mod tests {
         type Internal = MultiMachine;
         type Action = Box<[Statepoint<i64, i64>]>;
 
-        fn step(input: &i64, mach: &mut MultiMachine) -> Self::Action {
+        fn step(&self, input: &i64, mach: &mut MultiMachine) -> Self::Action {
             let vec = vec![
                 mach.first.transition(input),
                 {
@@ -148,6 +148,7 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
     struct MagicNumDecider;
 
     impl ParallelDecider for MagicNumDecider {
@@ -156,7 +157,7 @@ mod tests {
         type Term = i64;
         type Exit = ();
 
-        fn each_step(input: &i64, slicebox: Box<[Statepoint<i64, i64>]>) -> 
+        fn each_step(&self, input: &i64, slicebox: Box<[Statepoint<i64, i64>]>) -> 
             Statepoint<Box<[Statepoint<i64, i64>]>, ()>
         {
             if *input == 0 {

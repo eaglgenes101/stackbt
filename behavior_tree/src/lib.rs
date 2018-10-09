@@ -28,6 +28,8 @@
 #![cfg_attr(feature = "try_trait", feature(try_trait))]
 
 extern crate stackbt_automata_impl;
+extern crate num_traits;
+extern crate num_derive;
 
 /// The base leaf nodes on which behavior trees are built. 
 pub mod base_nodes;

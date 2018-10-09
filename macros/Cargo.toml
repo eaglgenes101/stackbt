@@ -6,3 +6,8 @@ readme = "../README.md"
 license = "MIT/Apache-2.0"
 description = "Macros for StackBT"
 repository = "https://github.com/eaglgenes101/stackbt"
+
+[dependencies]
+stackbt_behavior_tree = { path = "../behavior_tree", version = "^0.1.2" }
+num-derive = "0.2.2"
+num-traits = "0.2.6"

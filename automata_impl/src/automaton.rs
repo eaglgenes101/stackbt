@@ -8,17 +8,14 @@ use std::iter::Iterator;
 /// # Example
 /// ```
 /// use stackbt_automata_impl::automaton::Automaton;
-/// 
-/// // If you don't mind the opacity and the mutable reach of a mutable 
-/// // closure, you can whip up an automata quick and dirty on top of one. 
-/// let mut count = 0;
-/// let mut counter: Box<FnMut(&bool) -> i64> = Box::new(
-///     move |do_increment: &bool| {
+/// use stackbt_automata_impl::internal_state_machine::InternalStateMachine;
+/// let mut counter = InternalStateMachine::with(
+///     |do_increment: &bool, count: &mut i64| {
 ///         if *do_increment {
-///             count += 1;
+///             *count += 1;
 ///         }
-///         count
-///     }
+///         *count
+///     }, 0
 /// );
 /// 
 /// assert_eq!(counter.transition(&false), 0);
@@ -91,17 +88,6 @@ impl<'k, P> Automaton<'k> for Box<P> where
     }
 }
 
-impl<'k, I, A> Automaton<'k> for FnMut(&I) -> A + 'k where 
-    I: 'k
-{
-    type Input = I;
-    type Action = A;
-
-    fn transition(&mut self, input: &I) -> A {
-        self(input)
-    }
-}
-
 impl<'k, M> Automaton<'k> for [M] where 
     M: Automaton<'k>
 {
@@ -146,7 +132,7 @@ mod tests {
         type Input = i64;
         type Action = i64;
 
-        fn step(increment: &i64, accumulator: &mut i64) -> i64 {
+        fn step(&self, increment: &i64, accumulator: &mut i64) -> i64 {
             let orig_acc = *accumulator;
             *accumulator += increment;
             orig_acc
@@ -158,7 +144,7 @@ mod tests {
         use internal_state_machine::InternalStateMachine;
         use automaton::Automaton;
         let zero_inf = 0..8;
-        let mut machine = InternalStateMachine::with(ThingMachine, 0);
+        let mut machine = InternalStateMachine::new(ThingMachine, 0);
         let machine_fn = machine.as_fnmut();
         let mut scanner = zero_inf.scan(machine_fn, |mach, input| {
             Option::Some(mach(&input))
@@ -179,7 +165,7 @@ mod tests {
         use internal_state_machine::InternalStateMachine;
         use automaton::Automaton;
         let zero_inf = 0..8;
-        let machine = InternalStateMachine::with(ThingMachine, 0);
+        let machine = InternalStateMachine::new(ThingMachine, 0);
         let machine_fn = machine.into_fnmut();
         let mut scanner = zero_inf.scan(machine_fn, |mach, input| {
             Option::Some(mach(&input))
@@ -200,7 +186,7 @@ mod tests {
         use internal_state_machine::InternalStateMachine;
         use automaton::Automaton;
         let zero_inf = 0..8;
-        let machine = InternalStateMachine::with(ThingMachine, 0);
+        let machine = InternalStateMachine::new(ThingMachine, 0);
         let machine_fn = Box::new(machine).boxed_into_fnmut();
         let mut scanner = zero_inf.scan(machine_fn, |mach, input| {
             Option::Some(mach(&input))

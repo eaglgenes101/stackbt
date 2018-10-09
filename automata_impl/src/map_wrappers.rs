@@ -16,7 +16,7 @@
 //! impl InputMachineMap for Inverter {
 //!     type In = bool;
 //!     type Out = bool;
-//!     fn input_transform(input: &bool) -> bool {
+//!     fn input_transform(&self, input: &bool) -> bool {
 //!         !*input
 //!     }
 //! }
@@ -31,7 +31,7 @@
 //!     }
 //! );
 //! 
-//! let mut modified_counter = InputMappedMachine::with(Inverter, counter);
+//! let mut modified_counter = InputMappedMachine::new(Inverter, counter);
 //! 
 //! assert_eq!(modified_counter.transition(&true), 0);
 //! assert_eq!(modified_counter.transition(&false), 1);
@@ -51,18 +51,44 @@ pub trait InputMachineMap {
     type Out;
     /// Map between the input supplied and the output to feed into the 
     /// enclosed automaton. 
-    fn input_transform(&Self::In) -> Self::Out;
+    fn input_transform(&self, &Self::In) -> Self::Out;
+}
+
+pub struct InputMapClosure<I, O, C> where C: Fn(&I) -> O {
+    closure: C,
+    _junk: PhantomData<(I, O)>
+}
+
+impl<I, O, C> InputMapClosure<I, O, C> where C: Fn(&I) -> O {
+    fn new(closure: C) -> InputMapClosure<I, O, C> {
+        InputMapClosure {
+            closure: closure,
+            _junk: PhantomData
+        }
+    }
+}
+
+impl<I, O, C> InputMachineMap for InputMapClosure<I, O, C> where 
+    C: Fn(&I) -> O 
+{
+    type In = I;
+    type Out = O;
+    fn input_transform(&self, input: &I) -> O {
+        (self.closure)(input)
+    }
+
 }
 
 /// Wrapper for a automaton which converts between the provided input type
 /// and the input type expected by the automaton. 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct InputMappedMachine<'k, M, W> where
     M: Automaton<'k>,
     W: InputMachineMap<Out=M::Input>
 {
     machine: M,
-    _exists_tuple: PhantomData<&'k W>
+    wrapper: W,
+    _lifetime_use: PhantomData<&'k W>
 }
 
 impl<'k, M, W> InputMappedMachine<'k, M, W> where
@@ -70,29 +96,21 @@ impl<'k, M, W> InputMappedMachine<'k, M, W> where
     W: InputMachineMap<Out=M::Input>
 {
     /// Create a new input mapped automaton. 
-    pub fn new(machine: M) -> InputMappedMachine<'k, M, W> {
+    pub fn new(wrapper: W, machine: M) -> InputMappedMachine<'k, M, W> {
         InputMappedMachine {
             machine,
-            _exists_tuple: PhantomData
-        }
-    }
-
-    /// Create an new input mapped automaton, using a dummy object to supply
-    /// the type of the wrapper. 
-    pub fn with(_type_helper: W, machine: M) -> InputMappedMachine<'k, M, W> {
-        InputMappedMachine {
-            machine,
-            _exists_tuple: PhantomData
+            wrapper,
+            _lifetime_use: PhantomData
         }
     }
 }
 
 impl<'k, M, W> Default for InputMappedMachine<'k, M, W> where
     M: Automaton<'k> + Default,
-    W: InputMachineMap<Out=M::Input>
+    W: InputMachineMap<Out=M::Input> + Default
 {
     fn default() -> InputMappedMachine<'k, M, W> {
-        InputMappedMachine::new(M::default())
+        InputMappedMachine::new(W::default(), M::default())
     }
 }
 
@@ -105,7 +123,7 @@ impl<'k, M, W> Automaton<'k> for InputMappedMachine<'k, M, W> where
 
     #[inline]
     fn transition(&mut self, input: &W::In) -> M::Action {
-        self.machine.transition(&W::input_transform(input))
+        self.machine.transition(&self.wrapper.input_transform(input))
     }
 }
 
@@ -124,18 +142,27 @@ pub trait OutputMachineMap {
     type Out;
     /// Map between the input returned by the automaton and the output to
     /// return. 
-    fn output_transform(Self::In) -> Self::Out;
+    fn output_transform(&self, Self::In) -> Self::Out;
+}
+
+impl<I, O> OutputMachineMap for Fn(I) -> O {
+    type In = I;
+    type Out = O;
+    fn output_transform(&self, input: I) -> O {
+        self(input)
+    }
 }
 
 /// Wrapper for an automaton which converts between the actions emitted by the
 /// automaton and the ones exposed by the wrapper. 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct OutputMappedMachine<'k, M, W> where
     M: Automaton<'k>,
     W: OutputMachineMap<In=M::Action>
 {
     machine: M,
-    _exists_tuple: PhantomData<&'k W>
+    wrapper: W,
+    _lifetime_use: PhantomData<&'k W>
 }
 
 impl<'k, M, W> OutputMappedMachine<'k, M, W> where
@@ -143,29 +170,21 @@ impl<'k, M, W> OutputMappedMachine<'k, M, W> where
     W: OutputMachineMap<In=M::Action>
 {
     /// Create a new output mapped automaton. 
-    pub fn new(machine: M) -> OutputMappedMachine<'k, M, W> {
+    pub fn new(outer: W, machine: M) -> OutputMappedMachine<'k, M, W> {
         OutputMappedMachine {
             machine,
-            _exists_tuple: PhantomData
-        }
-    }
-
-    /// Create an new output mapped automaton, using a dummy object to supply
-    /// the type of the wrapper. 
-    pub fn with(_type_helper: W, machine: M) -> OutputMappedMachine<'k, M, W> {
-        OutputMappedMachine {
-            machine,
-            _exists_tuple: PhantomData
+            wrapper: outer,
+            _lifetime_use: PhantomData
         }
     }
 }
 
 impl<'k, M, W> Default for OutputMappedMachine<'k, M, W> where
     M: Automaton<'k> + Default,
-    W: OutputMachineMap<In=M::Action>
+    W: OutputMachineMap<In=M::Action> + Default
 {
     fn default() -> OutputMappedMachine<'k, M, W> {
-        OutputMappedMachine::new(M::default())
+        OutputMappedMachine::new(W::default(), M::default())
     }
 }
 
@@ -178,7 +197,7 @@ impl<'k, M, W> Automaton<'k> for OutputMappedMachine<'k, M, W> where
 
     #[inline]
     fn transition(&mut self, input: &M::Input) -> W::Out {
-        W::output_transform(self.machine.transition(input))
+        self.wrapper.output_transform(self.machine.transition(input))
     }
 }
 
@@ -193,19 +212,37 @@ pub trait LazyConstructor<'k> {
     /// Type of the automaton to create. 
     type Creates: Automaton<'k>;
     /// Create a new automaton. 
-    fn create(&<Self::Creates as Automaton<'k>>::Input) -> Self::Creates;
+    fn create(&self, &<Self::Creates as Automaton<'k>>::Input) -> Self::Creates;
+}
+
+impl<'k, S> LazyConstructor<'k> for Fn(&S::Input) -> S where 
+    S: Automaton<'k>
+{
+    type Creates = S;
+
+    fn create(&self, input: &S::Input) -> S {
+        self(input)
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum LazyConstructedInner<'k, M, C> where
+    M: Automaton<'k>,
+    C: LazyConstructor<'k, Creates=M>
+{
+    Machine(M, PhantomData<&'k M>),
+    Pending(C),
 }
 
 /// Wrapper for for a machine, which defers initialization until the first 
 /// input is supplied, after which the machine is constructed using this input
 /// as a parameter. 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct LazyConstructedMachine<'k, M, C> where
     M: Automaton<'k>,
     C: LazyConstructor<'k, Creates=M>
 {
-    machine: Option<M>,
-    _exists_tuple: PhantomData<&'k C>
+    internal: Option<LazyConstructedInner<'k, M, C>>
 }
 
 impl<'k, M, C> LazyConstructedMachine<'k, M, C> where
@@ -213,19 +250,9 @@ impl<'k, M, C> LazyConstructedMachine<'k, M, C> where
     C: LazyConstructor<'k, Creates=M>
 {
     /// Create an new lazily constructed automaton. 
-    pub fn new() -> LazyConstructedMachine<'k, M, C> {
-        LazyConstructedMachine{
-            machine: Option::None,
-            _exists_tuple: PhantomData
-        }
-    }
-
-    /// Create an new lazily constructed automaton, using a dummy object to 
-    /// supply the type of the wrapper. 
-    pub fn with(_type_assist: C) -> LazyConstructedMachine<'k, M, C> {
-        LazyConstructedMachine{
-            machine: Option::None,
-            _exists_tuple: PhantomData
+    pub fn new(construct: C) -> LazyConstructedMachine<'k, M, C> {
+        LazyConstructedMachine {
+            internal: Option::Some(LazyConstructedInner::Pending(construct))
         }
     }
 
@@ -233,18 +260,17 @@ impl<'k, M, C> LazyConstructedMachine<'k, M, C> where
     /// wrapper.
     pub fn from_existing(machine: M) -> LazyConstructedMachine<'k, M, C> {
         LazyConstructedMachine {
-            machine: Option::Some(machine),
-            _exists_tuple: PhantomData
+            internal: Option::Some(LazyConstructedInner::Machine(machine, PhantomData))
         }
     }
 }
 
 impl<'k, M, C> Default for LazyConstructedMachine<'k, M, C> where
     M: Automaton<'k>,
-    C: LazyConstructor<'k, Creates=M>
+    C: LazyConstructor<'k, Creates=M> + Default
 {
     fn default() -> LazyConstructedMachine<'k, M, C> {
-        LazyConstructedMachine::new()
+        LazyConstructedMachine::new(C::default())
     }
 }
 
@@ -257,19 +283,18 @@ impl<'k, M, C> Automaton<'k> for LazyConstructedMachine<'k, M, C> where
 
     #[inline]
     fn transition(&mut self, input: &M::Input) -> M::Action {
-        let maybe_machine = self.machine.take();
-        match maybe_machine {
-            Option::Some(mut m) => {
-                let retval = m.transition(input);
-                self.machine = Option::Some(m);
-                retval
+        let machine = match self.internal.take().unwrap() {
+            LazyConstructedInner::Machine(m, _) => m,
+            LazyConstructedInner::Pending(c) => c.create(input)
+        };
+        self.internal = Option::Some(
+            LazyConstructedInner::Machine(machine, PhantomData)
+        );
+        match self.internal {
+            Option::Some(LazyConstructedInner::Machine(ref mut m, _)) => {
+                m.transition(input)
             },
-            Option::None => {
-                let mut new_machine = C::create(input);
-                let retval = new_machine.transition(input);
-                self.machine = Option::Some(new_machine);
-                retval
-            }
+            _ => unreachable!("Should be a machine at this point")
         }
     }
 }
@@ -284,12 +309,12 @@ pub trait CustomConstructor<'k> {
     /// Type of the automaton to create. 
     type Creates: Automaton<'k>;
     /// Create a new automaton. 
-    fn create() -> Self::Creates;
+    fn create(&self) -> Self::Creates;
 }
 
 /// Wrapper for an automaton which designates a default constructor for that
 /// automaton, constructing it from the constructor. 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct CustomConstructedMachine<'k, M, C> where
     M: Automaton<'k>,
     C: CustomConstructor<'k, Creates=M>
@@ -303,18 +328,9 @@ impl<'k, M, C> CustomConstructedMachine<'k, M, C> where
     C: CustomConstructor<'k, Creates=M>
 {
     /// Create an new custom constructed automaton. 
-    pub fn new() -> CustomConstructedMachine<'k, M, C> {
+    pub fn new(constructor: &C) -> CustomConstructedMachine<'k, M, C> {
         CustomConstructedMachine {
-            machine: C::create(),
-            _exists_tuple: PhantomData
-        }
-    }
-
-    /// Create an new custom constructed automaton, using a dummy object to 
-    /// supply the type of the wrapper. 
-    pub fn with(_type_assist: C) -> CustomConstructedMachine<'k, M, C> {
-        CustomConstructedMachine {
-            machine: C::create(),
+            machine: constructor.create(),
             _exists_tuple: PhantomData
         }
     }
@@ -331,10 +347,10 @@ impl<'k, M, C> CustomConstructedMachine<'k, M, C> where
 
 impl<'k, M, C> Default for CustomConstructedMachine<'k, M, C> where
     M: Automaton<'k>,
-    C: CustomConstructor<'k, Creates=M>
+    C: CustomConstructor<'k, Creates=M> + Default
 {
     fn default() -> CustomConstructedMachine<'k, M, C> {
-        CustomConstructedMachine::new()
+        CustomConstructedMachine::new(&C::default())
     }
 }
 
@@ -372,7 +388,7 @@ mod tests {
         type Internal = ();
         type Action = i64;
 
-        fn step(input: &i64, state: &mut ()) -> i64 {
+        fn step(&self, input: &i64, state: &mut ()) -> i64 {
             *input
         }
     }
@@ -382,7 +398,7 @@ mod tests {
     impl InputMachineMap for InMap {
         type In = i64;
         type Out = i64;
-        fn input_transform(input: &i64) -> i64 {
+        fn input_transform(&self, input: &i64) -> i64 {
             -input
         }
     }
@@ -390,8 +406,8 @@ mod tests {
     #[test]
     fn input_map_test() {
         use map_wrappers::InputMappedMachine;
-        let base_node = InternalStateMachine::with(Echoer, ());
-        let mut wrapped_machine = InputMappedMachine::with(InMap, base_node);
+        let base_node = InternalStateMachine::new(Echoer, ());
+        let mut wrapped_machine = InputMappedMachine::new(InMap, base_node);
         assert_eq!(wrapped_machine.transition(&-5), 5);
         assert_eq!(wrapped_machine.transition(&4), -4);
         assert_eq!(wrapped_machine.transition(&-7), 7);
@@ -404,7 +420,7 @@ mod tests {
         type In = i64;
         type Out = i64;
 
-        fn output_transform(val: i64) -> i64 {
+        fn output_transform(&self, val: i64) -> i64 {
             val + 1
         }
     }
@@ -412,8 +428,8 @@ mod tests {
     #[test]
     fn output_map_test() {
         use map_wrappers::OutputMappedMachine;
-        let base_node = InternalStateMachine::with(Echoer, ());
-        let mut wrapped_machine = OutputMappedMachine::with(OutMap, base_node);
+        let base_node = InternalStateMachine::new(Echoer, ());
+        let mut wrapped_machine = OutputMappedMachine::new(OutMap, base_node);
         assert_eq!(wrapped_machine.transition(&-5), -4);
         assert_eq!(wrapped_machine.transition(&4), 5);
         assert_eq!(wrapped_machine.transition(&-7), -6);
@@ -428,7 +444,7 @@ mod tests {
         type Internal = i64;
         type Action = i64;
 
-        fn step(input: &i64, state: &mut i64) -> i64{
+        fn step(&self, input: &i64, state: &mut i64) -> i64{
             *state
         }
     }
@@ -438,15 +454,15 @@ mod tests {
     impl LazyConstructor<'static> for LazyWrapper {
         type Creates = InternalStateMachine<'static, IndefinitePlayback>;
 
-        fn create(input: &i64) -> Self::Creates {
-            InternalStateMachine::with(IndefinitePlayback, *input)
+        fn create(&self, input: &i64) -> Self::Creates {
+            InternalStateMachine::new(IndefinitePlayback, *input)
         }
     }
 
     #[test]
     fn lazy_constructor_test() {
         use map_wrappers::LazyConstructedMachine;
-        let mut new_machine = LazyConstructedMachine::with(LazyWrapper);
+        let mut new_machine = LazyConstructedMachine::new(LazyWrapper);
         assert_eq!(new_machine.transition(&2), 2);
         assert_eq!(new_machine.transition(&5), 2);
         assert_eq!(new_machine.transition(&-3), 2);
@@ -454,7 +470,7 @@ mod tests {
         assert_eq!(new_machine.transition(&4), 2);
 
 
-        let mut new_machine_1 = LazyConstructedMachine::with(LazyWrapper);
+        let mut new_machine_1 = LazyConstructedMachine::new(LazyWrapper);
         assert_eq!(new_machine_1.transition(&5), 5);
         assert_eq!(new_machine_1.transition(&5), 5);
         assert_eq!(new_machine_1.transition(&-3), 5);
@@ -466,21 +482,21 @@ mod tests {
 
     impl CustomConstructor<'static> for FixedWrapper {
         type Creates = InternalStateMachine<'static, IndefinitePlayback>;
-        fn create() -> Self::Creates {
-            InternalStateMachine::with(IndefinitePlayback, 12)
+        fn create(&self) -> Self::Creates {
+            InternalStateMachine::new(IndefinitePlayback, 12)
         }
     }
     #[test]
     fn custom_constructor_test() {
         use map_wrappers::CustomConstructedMachine;
-        let mut new_machine = CustomConstructedMachine::with(FixedWrapper);
+        let mut new_machine = CustomConstructedMachine::new(&FixedWrapper);
         assert_eq!(new_machine.transition(&4), 12);
         assert_eq!(new_machine.transition(&-5), 12);
         assert_eq!(new_machine.transition(&2), 12);
         assert_eq!(new_machine.transition(&-2), 12);
         assert_eq!(new_machine.transition(&4), 12);
 
-        let mut new_machine_1 = CustomConstructedMachine::with(FixedWrapper);
+        let mut new_machine_1 = CustomConstructedMachine::new(&FixedWrapper);
         assert_eq!(new_machine_1.transition(&-3), 12);
         assert_eq!(new_machine_1.transition(&-3), 12);
         assert_eq!(new_machine_1.transition(&6), 12);

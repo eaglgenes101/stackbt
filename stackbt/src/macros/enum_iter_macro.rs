@@ -1,4 +1,5 @@
-#[doc(hidden)]
+//! Copypaste of stackbt_macros/enum_iter_macro.rs which exists 
+//! as a workaround to the inability to reexport macros. #[doc(hidden)]
 #[macro_export]
 macro_rules! first {
     (

@@ -13,6 +13,37 @@ pub trait ReferenceTransition {
     fn step(self, &Self::Input) -> (Self::Action, Self);
 }
 
+/// Type which exists to make utilizing closures with internal state machines
+/// that much more possible. 
+pub struct ReferenceTransClosure<I, A, C> where 
+    C: FnMut(&I) -> A
+{
+    closure: C,
+    _junk: PhantomData<(I, A)>
+}
+
+impl<I, A, C> ReferenceTransClosure<I, A, C> where 
+    C: FnMut(&I) -> A
+{
+    fn new(closure: C) -> ReferenceTransClosure<I, A, C> {
+        ReferenceTransClosure {
+            closure: closure,
+            _junk: PhantomData
+        }
+    }
+}
+
+impl<I, A, C> ReferenceTransition for ReferenceTransClosure<I, A, C> where 
+    C: FnMut(&I) -> A
+{
+    type Input = I;
+    type Action = A;
+    fn step(self, input: &I) -> (A, Self) {
+        let mut mut_self = self;
+        ((mut_self.closure)(input), mut_self)
+    }
+}
+
 /// State machine implemented through a self-contained callable type. Each 
 /// step, the currently referenced callable is called, returning an action 
 /// and the new value to call for the next step. 
@@ -51,7 +82,7 @@ pub trait ReferenceTransition {
 /// assert!(latch.transition(&(false, false)));
 /// assert!(latch.transition(&(true, true)));
 /// ```
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct RefStateMachine<'k, C> where 
     C: ReferenceTransition + 'k
 {
@@ -70,6 +101,15 @@ impl <'k, C> RefStateMachine<'k, C> where
         }
     }
 }
+
+impl<'k, I, A, C> RefStateMachine<'k, ReferenceTransClosure<I, A, C>> where 
+    C: FnMut(&I) -> A
+{
+    /// Create a new internal state machine from a closure. 
+    pub fn with(init: C) -> RefStateMachine<'k, ReferenceTransClosure<I, A, C>> {
+        RefStateMachine::new(ReferenceTransClosure::new(init))
+    }
+} 
 
 impl <'k, C> Default for RefStateMachine<'k, C> where 
     C: ReferenceTransition + Default + 'k
