@@ -1,6 +1,7 @@
 use behavior_tree_node::{BehaviorTreeNode, NodeResult};
 use num_traits::FromPrimitive;
 
+
 /// Trait for an enumeration of nodes, all of which have the same input, 
 /// nonterminals, and terminals. Each variant corresponds to a different 
 /// possible subnode of the enumerable supernode. 
@@ -15,6 +16,85 @@ pub trait EnumNode: BehaviorTreeNode {
     fn new(Self::Discriminant) -> Self;
 
     fn discriminant_of(&self) -> Self::Discriminant;
+}
+
+/// Declarative macro for quickly and easily declaring an serial node enum.
+#[cfg(feature = "existential_type")]
+#[macro_export]
+macro_rules! enum_node {
+    (
+        type Input = $inputtype:ty ;
+        type Nonterminal = $nontermtype:ty ;
+        type Terminal = $termtype:ty ;
+        $( #[ $mval:meta ] )*
+        enum $name:ident : $itername:ident {
+            $( 
+                $( #[ $emval:meta ] )*
+                $variant:ident ( $( $statements:stmt )* )
+            ),*
+        }
+    ) => {
+        $(
+            existential type $variant : BehaviorTreeNode<Input = $inputtype,
+                Nonterminal = $nontermtype, Terminal = $termtype > ;
+        )*
+
+        $( #[ $mval ] )*
+        enum $name {
+            $(
+                $( #[ $emval ] )*
+                $variant ( $variant )
+            ),*
+        }
+
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+        #[derive(::num_derive::ToPrimitive, ::num_derive::FromPrimitive)]
+        enum $itername {
+            $( $variant ),*
+        }
+
+        impl BehaviorTreeNode for $name {
+            type Input = $inputtype;
+            type Nonterminal = $nontermtype;
+            type Terminal = $termtype;
+
+            fn step(self, input: & $inputtype) -> NodeResult< $nontermtype , 
+                $termtype , Self > where Self: Sized 
+            {
+                match self {
+                    $(
+                        $name :: $variant (val) => match val.step(input) {
+                            NodeResult::Nonterminal(v, o) => NodeResult::Nonterminal(
+                                v, 
+                                $name :: $variant (o)
+                            ),
+                            NodeResult::Terminal(v) => NodeResult::Terminal(v)
+                        }
+                    ),*
+                }
+            }
+        }
+
+        impl EnumNode for $name {
+            type Discriminant = $itername;
+
+            fn new(discriminant: $itername) -> Self {
+                match discriminant {
+                    $(
+                        $itername :: $variant => $name :: $variant ( 
+                            (| | -> $variant { $( $statements )* })()
+                        )
+                    ),*
+                }
+            }
+
+            fn discriminant_of(&self) -> $itername {
+                match self {
+                    $( $name :: $variant (_) => $itername :: $variant ),*
+                }
+            }
+        }
+    };
 }
 
 /// Enumeration of the possible decisions when the child node reaches a 
@@ -100,6 +180,7 @@ impl<E, D> SerialBranchNode<E, D> where
             node: E::new(variant),
             decider: decider
         }
+
     }
 
     /// Wrap an existing enumerated node in a serial branch node. 
@@ -161,105 +242,33 @@ impl<E, D> BehaviorTreeNode for SerialBranchNode<E, D> where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "existential_type"))]
 mod tests {
-    use base_nodes::{PredicateWait, WaitCondition};
+    use base_nodes::{PredicateWait};
     use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
     use serial_node::{EnumNode, SerialDecider, NontermDecision, TermDecision};
     use num_derive::{FromPrimitive, ToPrimitive};
 
-    #[derive(Copy, Clone, Default)]
-    struct PositiveRepeater;
-
-    impl WaitCondition for PositiveRepeater {
-        type Input = i64;
-        type Nonterminal = i64;
-        type Terminal = i64;
-        fn do_end(&self, input: &i64) -> Statepoint<i64, i64> {
-            if *input >= 0 {
-                Statepoint::Nonterminal(*input)
-            } else {
-                Statepoint::Terminal(*input)
-            }
-        }
-    }
-
-    #[derive(Copy, Clone, Default)]
-    struct NegativeRepeater;
-
-    impl WaitCondition for NegativeRepeater {
-        type Input = i64;
-        type Nonterminal = i64;
-        type Terminal = i64;
-        fn do_end(&self, input: &i64) -> Statepoint<i64, i64> {
-            if *input >= 0 {
-                Statepoint::Nonterminal(-*input)
-            } else {
-                Statepoint::Terminal(-*input)
-            }
-        }
-    }
-
-    #[derive(FromPrimitive, ToPrimitive, Copy, Clone)]
-    enum PosNegEnum {
-        Positive,
-        Negative
-    }
-
-    enum MultiMachine {
-        Positive(PredicateWait<PositiveRepeater>),
-        Negative(PredicateWait<NegativeRepeater>)
-    }
-
-    impl BehaviorTreeNode for MultiMachine {
+    enum_node! {
         type Input = i64;
         type Nonterminal = i64;
         type Terminal = i64;
 
-        fn step(self, input: &i64) -> NodeResult<i64, i64, Self> {
-            match self {
-                MultiMachine::Positive(n) => {
-                    match n.step(input) {
-                        NodeResult::Nonterminal(r, m) => NodeResult::Nonterminal(
-                            r,
-                            MultiMachine::Positive(m)
-                        ),
-                        NodeResult::Terminal(t) => NodeResult::Terminal(t)
-                    }
-                },
-                MultiMachine::Negative(n) => {
-                    match n.step(input) {
-                        NodeResult::Nonterminal(r, m) => NodeResult::Nonterminal(
-                            r,
-                            MultiMachine::Negative(m)
-                        ),
-                        NodeResult::Terminal(t) => NodeResult::Terminal(t)
-                    }
+        enum MultiMachine: PosNegEnum {
+            Positive (PredicateWait::new(|input: &i64| {
+                if *input >= 0 {
+                    Statepoint::Nonterminal(*input)
+                } else {
+                    Statepoint::Terminal(*input)
                 }
-            }
-        }
-    }
-    
-    impl EnumNode for MultiMachine {
-
-        type Discriminant = PosNegEnum;
-
-        fn new(thing: PosNegEnum) -> MultiMachine {
-            match thing {
-                PosNegEnum::Positive => MultiMachine::Positive(
-                    PredicateWait::default()
-                ),
-                PosNegEnum::Negative => MultiMachine::Negative(
-                    PredicateWait::default()
-                )
-            }
-        }
-
-        fn discriminant_of(&self) -> PosNegEnum {
-            match self {
-                MultiMachine::Positive(_) => PosNegEnum::Positive,
-                MultiMachine::Negative(_) => PosNegEnum::Negative
-            }
+            })),
+            Negative (PredicateWait::new(|input: &i64| {
+                if *input >= 0 {
+                    Statepoint::Nonterminal(-*input)
+                } else {
+                    Statepoint::Terminal(-*input)
+                }
+            }))
         }
     }
 

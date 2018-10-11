@@ -3,24 +3,12 @@ use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct GuardFailure<N>(pub N); 
 
-/// A node guard predicate. 
-pub trait NodeGuard {
-    /// Type of the input to take. 
-    type Input;
-    /// Type of the nonterminal to take. 
-    type Nonterminal;
-    /// Given references to the input taken and the nonterminal returned, 
-    /// determine whether to keep running the node (true) or end its 
-    /// execution prematurely (false). 
-    fn test(&self, &Self::Input, &Self::Nonterminal) -> bool;
-}
-
 /// Guard wrapper for a node, which, if the guard condition fails, causes an 
 /// abnormal exit of the node. 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct GuardedNode<N, G> where
     N: BehaviorTreeNode,
-    G: NodeGuard<Input=N::Input, Nonterminal=N::Nonterminal>
+    G: Fn(&N::Input, &N::Nonterminal) -> bool
 {
     node: N,
     guard: G
@@ -28,7 +16,7 @@ pub struct GuardedNode<N, G> where
 
 impl<N, G> GuardedNode<N, G> where 
     N: BehaviorTreeNode,
-    G: NodeGuard<Input=N::Input, Nonterminal=N::Nonterminal>
+    G: Fn(&N::Input, &N::Nonterminal) -> bool
 {
     /// Create a new guarded node. 
     pub fn new(guard: G, node: N) -> GuardedNode<N, G> {
@@ -39,18 +27,9 @@ impl<N, G> GuardedNode<N, G> where
     }
 }
 
-impl<N, G> Default for GuardedNode<N, G> where 
-    N: BehaviorTreeNode + Default,
-    G: NodeGuard<Input=N::Input, Nonterminal=N::Nonterminal> + Default
-{
-    fn default() -> GuardedNode<N, G> {
-        GuardedNode::new(G::default(), N::default())
-    }
-}
-
 impl<N, G> BehaviorTreeNode for GuardedNode<N, G> where
     N: BehaviorTreeNode,
-    G: NodeGuard<Input=N::Input, Nonterminal=N::Nonterminal>
+    G: Fn(&N::Input, &N::Nonterminal) -> bool
 {
     type Input = N::Input;
     type Nonterminal = N::Nonterminal;
@@ -62,7 +41,7 @@ impl<N, G> BehaviorTreeNode for GuardedNode<N, G> where
     {
         match self.node.step(input) {
             NodeResult::Nonterminal(n, m) => {
-                if self.guard.test(input, &n) {
+                if (self.guard)(input, &n) {
                     NodeResult::Nonterminal(n, GuardedNode::new(self.guard, m))
                 } else {
                     NodeResult::Terminal(Result::Err(GuardFailure(n)))
@@ -77,31 +56,15 @@ impl<N, G> BehaviorTreeNode for GuardedNode<N, G> where
 
 /// Enumeration of the possible decisions of a StepControl controller.
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub enum StepDecision {
+pub enum StepDecision<N> {
     /// Don't step the machine. 
     Pause, 
     /// Step the machine as normal. 
     Play, 
     /// Dispose the current machine, and initialize a new one in its place. 
-    Reset, 
+    Reset(N), 
     /// Reset the machine, and then subsequently step it. 
-    ResetPlay
-}
-
-/// Step controller for a node. 
-pub trait StepControl {
-    /// Type of the input to take. 
-    type Input;
-    /// Given a reference to the input, determine whether to pause, play, 
-    /// and/or reset the enclosed node before it starts. 
-    fn controlled_step(&self, &Self::Input) -> StepDecision;
-}
-
-impl<I> StepControl for Fn(&I) -> StepDecision {
-    type Input = I;
-    fn controlled_step(&self, input: &I) -> StepDecision {
-        self(input)
-    }
+    ResetPlay(N)
 }
 
 /// Nonterminal enum for a step-controlled node. 
@@ -117,16 +80,16 @@ pub enum StepCtrlNonterm<I> {
 /// reset a node depending on inputs, before the node goes forward. 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct StepControlledNode<N, S> where 
-    N: BehaviorTreeNode + Default,
-    S: StepControl<Input=N::Input>
+    N: BehaviorTreeNode,
+    S: Fn(&N::Input) -> StepDecision<N>
 {
     node: N,
     stepper: S
 }
 
 impl<N, S> StepControlledNode<N, S> where 
-    N: BehaviorTreeNode + Default,
-    S: StepControl<Input=N::Input>
+    N: BehaviorTreeNode,
+    S: Fn(&N::Input) -> StepDecision<N>
 {
     /// Create a new step controlled node. 
     pub fn new(stepper: S, node: N) -> StepControlledNode<N, S> {
@@ -137,18 +100,9 @@ impl<N, S> StepControlledNode<N, S> where
     }
 }
 
-impl<N, S> Default for StepControlledNode<N, S> where 
-    N: BehaviorTreeNode + Default,
-    S: StepControl<Input=N::Input> + Default
-{
-    fn default() -> StepControlledNode<N, S> {
-        StepControlledNode::new(S::default(), N::default())
-    }
-}
-
 impl<N, S> BehaviorTreeNode for StepControlledNode<N, S> where 
-    N: BehaviorTreeNode + Default,
-    S: StepControl<Input=N::Input>
+    N: BehaviorTreeNode,
+    S: Fn(&N::Input) -> StepDecision<N>
 {
     type Input = N::Input;
     type Nonterminal = StepCtrlNonterm<N::Nonterminal>;
@@ -158,7 +112,7 @@ impl<N, S> BehaviorTreeNode for StepControlledNode<N, S> where
     fn step(self, input: &N::Input) -> NodeResult<Self::Nonterminal, 
         N::Terminal, Self> 
     {
-        match self.stepper.controlled_step(input) {
+        match (self.stepper)(input) {
             StepDecision::Pause => {
                 NodeResult::Nonterminal(StepCtrlNonterm::Paused, self)
             },
@@ -173,14 +127,13 @@ impl<N, S> BehaviorTreeNode for StepControlledNode<N, S> where
                     NodeResult::Terminal(t) => NodeResult::Terminal(t)
                 }
             },
-            StepDecision::Reset => {
+            StepDecision::Reset(new_node) => {
                 NodeResult::Nonterminal(StepCtrlNonterm::Paused, Self::new(
                     self.stepper,
-                    N::default()
+                    new_node
                 ))
             },
-            StepDecision::ResetPlay => {
-                let mut new_machine = N::default();
+            StepDecision::ResetPlay(mut new_machine) => {
                 match new_machine.step(input) {
                     NodeResult::Nonterminal(n, m) => {
                         NodeResult::Nonterminal(
@@ -205,47 +158,20 @@ pub enum PostResetNonterm<N, T> {
     EndReset(T)
 }
 
-/// A post-resetting wrapper for a node, which after a node plays, may 
-/// or may not reset that node. 
-pub trait PostResetControl {
-    /// Type of the input to take. 
-    type Input;
-    /// Type of the nonterminal to take. 
-    type Nonterminal;
-    /// Type of the terminal to take. 
-    type Terminal;
-    /// Given a reference to the input and a statepoint corresponding to the 
-    /// enclosed node's state, return whether to reset it (true) or not 
-    /// (false) after it runs. 
-    fn do_reset(&self, &Self::Input, Statepoint<&Self::Nonterminal, 
-        &Self::Terminal>) -> bool;
-}
-
-impl<I, N, T> PostResetControl for Fn(&I, Statepoint<&N, &T>) -> bool {
-    type Input = I;
-    type Nonterminal = N;
-    type Terminal = T;
-    fn do_reset(&self, input: &I, state: Statepoint<&N, &T>) -> bool {
-        self(input, state)
-    }
-}
-
 /// A post-run resetting wrapper for a node, which may reset a node after 
 /// it runs. 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct PostResetNode<N, P> where 
-    N: BehaviorTreeNode + Default,
-    P: PostResetControl<Input=N::Input, Nonterminal=N::Nonterminal, 
-        Terminal=N::Terminal>
+    N: BehaviorTreeNode,
+    P: Fn(&N::Input, Statepoint<&N::Nonterminal, &N::Terminal>) -> Option<N>
 {
     node: N,
     resetter: P
 }
 
 impl<N, P> PostResetNode<N, P> where 
-    N: BehaviorTreeNode + Default,
-    P: PostResetControl<Input=N::Input, Nonterminal=N::Nonterminal, 
-        Terminal=N::Terminal>
+    N: BehaviorTreeNode,
+    P: Fn(&N::Input, Statepoint<&N::Nonterminal, &N::Terminal>) -> Option<N>
 {
     /// Create a new step controlled node. 
     pub fn new(resetter: P, node: N) -> PostResetNode<N, P> {
@@ -256,21 +182,9 @@ impl<N, P> PostResetNode<N, P> where
     }
 }
 
-
-impl<N, P> Default for PostResetNode<N, P> where 
-    N: BehaviorTreeNode + Default,
-    P: PostResetControl<Input=N::Input, Nonterminal=N::Nonterminal, 
-        Terminal=N::Terminal> + Default
-{
-    fn default() -> PostResetNode<N, P> {
-        PostResetNode::new(P::default(), N::default())
-    }
-}
-
 impl <N, P> BehaviorTreeNode for PostResetNode<N, P> where 
-    N: BehaviorTreeNode + Default,
-    P: PostResetControl<Input=N::Input, Nonterminal=N::Nonterminal, 
-        Terminal=N::Terminal>
+    N: BehaviorTreeNode,
+    P: Fn(&N::Input, Statepoint<&N::Nonterminal, &N::Terminal>) -> Option<N>
 {
     type Input = N::Input;
     type Nonterminal = PostResetNonterm<N::Nonterminal, N::Terminal>;
@@ -282,26 +196,24 @@ impl <N, P> BehaviorTreeNode for PostResetNode<N, P> where
     {
         match self.node.step(input) {
             NodeResult::Nonterminal(v, n) => {
-                if self.resetter.do_reset(input, Statepoint::Nonterminal(&v)) {
-                    NodeResult::Nonterminal(
-                        PostResetNonterm::ManualReset(v), 
-                        Self::new(self.resetter, N::default())
-                    )
-                } else {
-                    NodeResult::Nonterminal(
-                        PostResetNonterm::NoReset(v), 
+                match (self.resetter)(input, Statepoint::Nonterminal(&v)) {
+                    Option::Some(k) => NodeResult::Nonterminal(
+                        PostResetNonterm::ManualReset(v),
+                        Self::new(self.resetter, k)
+                    ),
+                    Option::None => NodeResult::Nonterminal(
+                        PostResetNonterm::NoReset(v),
                         Self::new(self.resetter, n)
                     )
                 }
             },
             NodeResult::Terminal(t) => {
-                if self.resetter.do_reset(input, Statepoint::Terminal(&t)) {
-                    NodeResult::Nonterminal(
+                match (self.resetter)(input, Statepoint::Terminal(&t)) {
+                    Option::Some(n) => NodeResult::Nonterminal(
                         PostResetNonterm::EndReset(t),
-                        Self::new(self.resetter, N::default())
-                    )
-                } else {
-                    NodeResult::Terminal(t)
+                        Self::new(self.resetter, n)
+                    ),
+                    Option::None => NodeResult::Terminal(t)
                 }
             }
         }
@@ -311,40 +223,23 @@ impl <N, P> BehaviorTreeNode for PostResetNode<N, P> where
 #[cfg(test)]
 mod tests {
     use stackbt_automata_impl::ref_state_machine::ReferenceTransition;
-    use base_nodes::{WaitCondition, PredicateWait};
+    use base_nodes::{PredicateWait};
     use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
-    use control_wrappers::{NodeGuard, StepControl, StepDecision, PostResetControl};
+    use control_wrappers::{StepDecision};
 
-    struct Echoer;
-
-    impl WaitCondition for Echoer {
-        type Input = i64;
-        type Nonterminal = i64;
-        type Terminal = i64;
-        fn do_end(&self, input: &i64) -> Statepoint<i64, i64> {
+    #[test]
+    fn guarded_node_test() {
+        use control_wrappers::{GuardedNode, GuardFailure};
+        let base_node = PredicateWait::new(|input: &i64| {
             if *input > 0 {
                 Statepoint::Nonterminal(*input)
             } else {
                 Statepoint::Terminal(*input)
             }
-        }
-    }
-
-    struct MagGuard;
-
-    impl NodeGuard for MagGuard {
-        type Input = i64;
-        type Nonterminal = i64;
-        fn test(&self, input: &i64, _whocares: &i64) -> bool {
+        });
+        let wrapped_node = GuardedNode::new(|input: &i64, _o: &i64| {
             *input > 5
-        }
-    }
-
-    #[test]
-    fn guarded_node_test() {
-        use control_wrappers::{GuardedNode, GuardFailure};
-        let base_node = PredicateWait::new(Echoer);
-        let wrapped_node = GuardedNode::new(MagGuard, base_node);
+        }, base_node);
         let wrapped_node_1 = match wrapped_node.step(&7) {
             NodeResult::Nonterminal(v, m) => {
                 assert_eq!(v, 7);
@@ -363,20 +258,6 @@ mod tests {
                 }
             }
         };
-    }
-
-    struct MagicPlayer;
-
-    impl StepControl for MagicPlayer {
-        type Input = i64;
-        fn controlled_step(&self, input: &i64) -> StepDecision {
-            match *input {
-                -1 =>  StepDecision::Pause,
-                -2 => StepDecision::Reset,
-                7 => StepDecision::ResetPlay,
-                _ => StepDecision::Play
-            }
-        }
     }
 
     #[derive(Copy, Clone)]
@@ -426,7 +307,18 @@ mod tests {
         use stackbt_automata_impl::ref_state_machine::RefStateMachine;
         let machine = RefStateMachine::new(Ratchet::Zero);
         let base_node = MachineWrapper::new(machine);
-        let wrapped_node = StepControlledNode::new(MagicPlayer, base_node);
+        let wrapped_node = StepControlledNode::new(|input: &i64|{
+            match *input {
+                -1 =>  StepDecision::Pause,
+                -2 => StepDecision::Reset(
+                    MachineWrapper::new(RefStateMachine::new(Ratchet::Zero))
+                ),
+                7 => StepDecision::ResetPlay(
+                    MachineWrapper::new(RefStateMachine::new(Ratchet::Zero))
+                ),
+                _ => StepDecision::Play
+            }
+        }, base_node);
         let wrapped_node_1 = match wrapped_node.step(&-1) {
             NodeResult::Nonterminal(v, m) => {
                 match v {
@@ -478,18 +370,6 @@ mod tests {
         };
     }
 
-    struct Resetter;
-
-    impl PostResetControl for Resetter {
-        type Input = i64;
-        type Nonterminal = i64;
-        type Terminal = ();
-
-        fn do_reset(&self, input: &i64, _output: Statepoint<&i64, &()>) -> bool {
-            *input == -5 || *input == 5
-        }
-    }
-
     #[test]
     fn post_reset_test() {
         use control_wrappers::{PostResetNode, PostResetNonterm};
@@ -497,7 +377,13 @@ mod tests {
         use stackbt_automata_impl::ref_state_machine::RefStateMachine;
         let machine = RefStateMachine::new(Ratchet::Zero);
         let base_node = MachineWrapper::new(machine);
-        let wrapped_node = PostResetNode::new(Resetter, base_node);
+        let wrapped_node = PostResetNode::new(|input: &i64, _o: Statepoint<&i64, &()>|{
+            if *input == -5 || *input == 5 {
+                Option::Some(MachineWrapper::new(RefStateMachine::new(Ratchet::Zero)))
+            } else {
+                Option::None
+            }
+        }, base_node);
         let wrapped_node_1 = match wrapped_node.step(&1) {
             NodeResult::Nonterminal(v, n) => {
                 match v {

@@ -2,28 +2,6 @@ use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
 use std::marker::PhantomData;
 use stackbt_automata_impl::automaton::Automaton;
 
-/// Wait condition for a predicate wait node. 
-pub trait WaitCondition {
-    /// Type of the input to take. 
-    type Input;
-    /// Type of the nonterminal statepoints to return. 
-    type Nonterminal;
-    /// Type of the terminal statepoints to return. 
-    type Terminal;
-    /// Given the input, determine whether to return a nonterminal state, or 
-    /// a terminal state. 
-    fn do_end(&self, &Self::Input) -> Statepoint<Self::Nonterminal, Self::Terminal>;
-}
-
-impl<I, N, T> WaitCondition for Fn(&I) -> Statepoint<N, T> {
-    type Input = I;
-    type Nonterminal = N;
-    type Terminal = T;
-    fn do_end(&self, input: &I) -> Statepoint<N, T> {
-        self(input)
-    }
-}
-
 /// Node whose function is to stall within itself until a function of its 
 /// input return a terminal state, then terminates at that state. 
 /// 
@@ -54,63 +32,55 @@ impl<I, N, T> WaitCondition for Fn(&I) -> Statepoint<N, T> {
 ///     _ => unreachable!("Node doesn't return nonterminal")
 /// };
 /// ```
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct PredicateWait<F> where 
-    F: WaitCondition
+
+#[derive(PartialEq, Debug)]
+pub struct PredicateWait<I, N, T, C> where 
+    C: Fn(&I) -> Statepoint<N, T>
 {
-    condition: F
+    closure: C,
+    _junk: PhantomData<(I, N, T)>
 }
 
-impl<F> PredicateWait<F> where 
-    F: WaitCondition
+impl<I, N, T, C> Clone for PredicateWait<I, N, T, C> where 
+    C: Fn(&I) -> Statepoint<N, T> + Clone 
 {
-    /// Create a new predicate wait node. 
-    pub fn new(cond: F) -> PredicateWait<F> {
+    fn clone(&self) -> Self {
         PredicateWait {
-            condition: cond
+            closure: self.closure.clone(),
+            _junk: PhantomData
         }
     }
 }
 
-impl<F> Default for PredicateWait<F> where 
-    F: WaitCondition + Default
+impl<I, N, T, C> Copy for PredicateWait<I, N, T, C> where 
+    C: Fn(&I) -> Statepoint<N, T> + Copy
+{}
+
+impl<I, N, T, C> PredicateWait<I, N, T, C> where 
+    C: Fn(&I) -> Statepoint<N, T>
 {
-    fn default() -> PredicateWait<F> {
-        PredicateWait::new(F::default())
+    /// Create a new predicate wait node. 
+    pub fn new(closure: C) -> Self {
+        PredicateWait {
+            closure: closure,
+            _junk: PhantomData
+        }
     }
 }
 
-impl<F> BehaviorTreeNode for PredicateWait<F> where 
-    F: WaitCondition
+impl<I, N, T, C> BehaviorTreeNode for PredicateWait<I, N, T, C> where 
+    C: Fn(&I) -> Statepoint<N, T>
 {
-    type Input = F::Input;
-    type Nonterminal = F::Nonterminal;
-    type Terminal = F::Terminal;
+    type Input = I;
+    type Nonterminal = N;
+    type Terminal = T;
 
     #[inline]
-    fn step(self, input: &F::Input) -> NodeResult<F::Nonterminal, F::Terminal, Self> {
-        match self.condition.do_end(input) {
+    fn step(self, input: &I) -> NodeResult<N, T, Self> {
+        match (self.closure)(input) {
             Statepoint::Terminal(t) => NodeResult::Terminal(t),
             Statepoint::Nonterminal(n) => NodeResult::Nonterminal(n, self)
         }
-    }
-}
-
-/// Wrapper for a function call, intended for Evaluation. 
-pub trait CallWrapper {
-    /// Type of the input to take. 
-    type Input;
-    /// Type of the output to return. 
-    type Output;
-    /// Given the input, determine the value to immediately terminate with. 
-    fn call(&self, &Self::Input) -> Self::Output;
-}
-
-impl<I, O> CallWrapper for Fn(&I) -> O {
-    type Input = I;
-    type Output = O;
-    fn call(&self, input: &I) -> O {
-        self(input)
     }
 }
 
@@ -138,47 +108,104 @@ impl<I, O> CallWrapper for Fn(&I) -> O {
 ///     _ => unreachable!("Node doesn't return nonterminal")
 /// };
 /// ```
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct Evaluation<F> where 
-    F: CallWrapper
+#[derive(PartialEq, Debug)]
+pub struct Evaluation<I, O, C> where 
+    C: Fn(&I) -> O
 {
-    to_call: F
+    closure: C,
+    _junk: PhantomData<(I, O)>
 }
 
-impl<F> Evaluation<F> where 
-    F: CallWrapper
+impl<I, O, C> Clone for Evaluation<I, O, C> where
+    C: Fn(&I) -> O + Clone 
 {
-    /// Create a new evaluation node. 
-    pub fn new(to_call: F) -> Evaluation<F> {
+    fn clone(&self) -> Self {
         Evaluation {
-            to_call
+            closure: self.closure.clone(),
+            _junk: PhantomData
         }
     }
 }
 
-impl<F> Default for Evaluation<F> where 
-    F: CallWrapper + Default
+impl<I, O, C> Copy for Evaluation<I, O, C> where
+    C: Fn(&I) -> O + Copy
+{}
+
+impl<I, O, C> Evaluation<I, O, C> where
+    C: Fn(&I) -> O
 {
-    fn default() -> Evaluation<F> {
-        Evaluation::new(F::default())
+    /// Create a new evaluation node. 
+    pub fn new(closure: C) -> Self {
+        Evaluation {
+            closure: closure,
+            _junk: PhantomData
+        }
     }
 }
 
-impl<F> BehaviorTreeNode for Evaluation<F> where 
-    F: CallWrapper
+impl<I, O, C> BehaviorTreeNode for Evaluation<I, O, C> where 
+    C: Fn(&I) -> O
 {
-    type Input = F::Input;
+    type Input = I;
     type Nonterminal = ();
-    type Terminal = F::Output;
+    type Terminal = O;
 
     #[inline]
-    fn step(self, input: &F::Input) -> NodeResult<(), F::Output, Self> {
-        NodeResult::Terminal(self.to_call.call(input))
+    fn step(self, input: &I) -> NodeResult<(), O, Self> {
+        NodeResult::Terminal((self.closure)(input))
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct CallLoop<I, O, C> where 
+    C: Fn(&I) -> O
+{
+    closure: C,
+    _junk: PhantomData<(I, O)>
+}
+
+impl<I, O, C> Clone for CallLoop<I, O, C> where
+    C: Fn(&I) -> O + Clone 
+{
+    fn clone(&self) -> Self {
+        CallLoop {
+            closure: self.closure.clone(),
+            _junk: PhantomData
+        }
+    }
+}
+
+impl<I, O, C> Copy for CallLoop<I, O, C> where
+    C: Fn(&I) -> O + Copy
+{}
+
+impl<I, O, C> CallLoop<I, O, C> where
+    C: Fn(&I) -> O
+{
+    /// Create a new evaluation node. 
+    pub fn new(closure: C) -> Self {
+        CallLoop {
+            closure: closure,
+            _junk: PhantomData
+        }
+    }
+}
+
+impl<I, O, C> BehaviorTreeNode for CallLoop<I, O, C> where 
+    C: Fn(&I) -> O
+{
+    type Input = I;
+    type Nonterminal = O;
+    type Terminal = ();
+
+    #[inline]
+    fn step(self, input: &I) -> NodeResult<O, (), Self> {
+        NodeResult::Nonterminal((self.closure)(input), self)
     }
 }
 
 /// Node wrapper for an automaton. 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 pub struct MachineWrapper<M, N, T> where 
     M: Automaton<'static, Action=Statepoint<N, T>> + 'static
 {
@@ -186,6 +213,22 @@ pub struct MachineWrapper<M, N, T> where
     _m_bound: PhantomData<&'static M>,
     _exists_tuple: PhantomData<(N, T)>,
 }
+
+impl<M, N, T> Clone for MachineWrapper<M, N, T> where 
+    M: Automaton<'static, Action=Statepoint<N, T>> + 'static + Clone
+{
+    fn clone(&self) -> Self {
+        MachineWrapper { 
+            machine: self.machine.clone(),
+            _m_bound: PhantomData,
+            _exists_tuple: PhantomData
+        }
+    }
+}
+
+impl<M, N, T> Copy for MachineWrapper<M, N, T> where 
+    M: Automaton<'static, Action=Statepoint<N, T>> + 'static + Copy
+{}
 
 impl<M, N, T> MachineWrapper<M, N, T> where 
     M: Automaton<'static, Action=Statepoint<N, T>> + 'static
@@ -197,14 +240,6 @@ impl<M, N, T> MachineWrapper<M, N, T> where
             _m_bound: PhantomData,
             _exists_tuple: PhantomData
         }
-    }
-}
-
-impl<M, N, T> Default for MachineWrapper<M, N, T> where 
-    M: Automaton<'static, Action=Statepoint<N, T>> + Default + 'static
-{
-    fn default() -> MachineWrapper<M, N, T> {
-        MachineWrapper::new(M::default())
     }
 }
 
@@ -229,32 +264,72 @@ impl<M, N, T> BehaviorTreeNode for MachineWrapper<M, N, T> where
     }
 }
 
+/// Node wrapper for an automaton. 
+#[derive(PartialEq, Debug)]
+pub struct MachineLoop<M> where 
+    M: Automaton<'static> + 'static
+{
+    machine: M,
+    _m_bound: PhantomData<&'static M>,
+}
+
+impl<M> Clone for MachineLoop<M> where 
+    M: Automaton<'static> + 'static + Clone
+{
+    fn clone(&self) -> Self {
+        MachineLoop { 
+            machine: self.machine.clone(),
+            _m_bound: PhantomData,
+        }
+    }
+}
+
+impl<M> Copy for MachineLoop<M> where 
+    M: Automaton<'static> + 'static + Copy
+{}
+
+impl<M> MachineLoop<M> where 
+    M: Automaton<'static> + 'static
+{
+    /// Create a new machine wrapping node. 
+    pub fn new(machine: M) -> MachineLoop<M> {
+        MachineLoop { 
+            machine,
+            _m_bound: PhantomData
+        }
+    }
+}
+
+impl<M> BehaviorTreeNode for MachineLoop<M> where 
+    M: Automaton<'static> + 'static
+{
+    type Input = M::Input;
+    type Nonterminal = M::Action;
+    type Terminal = ();
+
+    #[inline]
+    fn step(self, input: &M::Input) -> NodeResult<M::Action, (), Self> {
+        let mut mut_self = self;
+        NodeResult::Nonterminal(mut_self.machine.transition(input), mut_self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use behavior_tree_node::Statepoint;
     use stackbt_automata_impl::internal_state_machine::InternalTransition;
-    use base_nodes::{WaitCondition, CallWrapper};
-
-    struct ThingPred;
-
-    impl WaitCondition for ThingPred {
-        type Input = i64;
-        type Nonterminal = ();
-        type Terminal = ();
-        fn do_end(&self, i: &i64) -> Statepoint<(), ()> {
-            if *i == 0 {
-                Statepoint::Terminal(())
-            } else {
-                Statepoint::Nonterminal(())
-            }
-        }
-    }
 
     #[test]
     fn pred_wait_test() {
         use behavior_tree_node::{BehaviorTreeNode, NodeResult};
         use base_nodes::PredicateWait;
-        let thing = PredicateWait::new(ThingPred);
+        let thing = PredicateWait::new(|i: &i64| {
+            if *i == 0 {
+                Statepoint::Terminal(())
+            } else {
+                Statepoint::Nonterminal(())
+            }
+        });
         let thing_1 = match thing.step(&4) {
             NodeResult::Nonterminal(_, x) => x,
             _ => unreachable!("Expected nonterminal state")
@@ -265,21 +340,11 @@ mod tests {
         }
     }
 
-    struct EvaluationValue;
-
-    impl CallWrapper for EvaluationValue {
-        type Input = i64;
-        type Output = i64;
-        fn call(&self, val: &i64) -> i64 {
-            *val
-        }
-    }
-
     #[test]
     fn evaluation_test() {
         use behavior_tree_node::{BehaviorTreeNode, NodeResult};
         use base_nodes::Evaluation;
-        let thing = Evaluation::new(EvaluationValue);
+        let thing = Evaluation::new(|val: &i64| *val);
         match thing.step(&5) {
             NodeResult::Terminal(t) => assert!(t == 5),
             _ => unreachable!("Expected terminal"),

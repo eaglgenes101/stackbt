@@ -13,10 +13,13 @@ num-derive = "0.2.2"
 num-traits = "0.2.6"
 
 [features]
-default = []
+default = ["nightly"]
 
 # Enable all nightly-dependent features
-nightly = ["try_trait"]
+nightly = ["try_trait", "existential_type"]
 
 # Enable support for the Try trait
 try_trait = []
+
+# Enable support for function traits
+existential_type = []

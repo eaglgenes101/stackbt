@@ -1,5 +1,6 @@
 use std::ops::FnMut;
 use std::iter::Iterator;
+use automata_combinators::{MachineSeries, MachineTee, ParallelMachines};
 
 /// The automaton trait is used to represent agents which, at a regular rate, 
 /// take input, process it, and return an action. Most of them also change 
@@ -73,6 +74,27 @@ pub trait Automaton<'k> {
         Box::new(move |input: &Self::Input| {
             this.transition(input)
         })
+    }
+
+    fn then<N>(self, after: N) -> MachineSeries<'k, Self, N> where
+        N: Automaton<'k, Input=Self::Action>,
+        Self: Sized + 'k
+    {
+        MachineSeries::new(self, after)
+    }
+
+    fn tee<N>(self, after: N) -> MachineTee<'k, Self, N> where
+        N: Automaton<'k, Input=Self::Action>,
+        Self: Sized + 'k
+    {
+        MachineTee::new(self, after)
+    }
+
+    fn alongside<N>(self, other: N) -> ParallelMachines<'k, Self, N> where 
+        N: Automaton<'k, Input=Self::Input>,
+        Self: Sized + 'k
+    {
+        ParallelMachines::new(self, other)
     }
 }
 

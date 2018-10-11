@@ -1,4 +1,4 @@
-use {FIELD_HEIGHT, FIELD_WIDTH};
+/*use {FIELD_HEIGHT, FIELD_WIDTH};
 use stackbt::automata_impl::{
     automaton::Automaton,
     internal_state_machine::{InternalTransition, InternalStateMachine},
@@ -331,3 +331,4 @@ impl WaitCondition for BoidPanic {
         }
     }
 }
+*/

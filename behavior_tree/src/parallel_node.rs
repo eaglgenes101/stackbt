@@ -91,7 +91,7 @@ impl<C, D> BehaviorTreeNode for ParallelBranchNode<C, D> where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "existential_type"))]
 mod tests {
     use base_nodes::MachineWrapper;
     use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
@@ -120,12 +120,21 @@ mod tests {
         }
     }
 
+    fn indefinite_increment_construct() -> InternalStateMachine<'static, 
+        IndefiniteIncrement> 
+    {
+        InternalStateMachine::new(IndefiniteIncrement, 0)
+    }
+
+    existential type IndefiniteConstructor: Fn() -> InternalStateMachine<'static, 
+        IndefiniteIncrement>;
+
     #[derive(Default)]
     struct MultiMachine {
         first: NodeRunner<MachineWrapper<InternalStateMachine<'static, 
-            IndefiniteIncrement>, i64, i64>>,
+            IndefiniteIncrement>, i64, i64>, IndefiniteConstructor>,
         second: NodeRunner<MachineWrapper<InternalStateMachine<'static, 
-            IndefiniteIncrement>, i64, i64>>,
+            IndefiniteIncrement>, i64, i64>, IndefiniteConstructor>,
     }
 
     #[derive(Copy, Clone, Default)]

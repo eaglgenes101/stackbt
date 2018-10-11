@@ -26,6 +26,7 @@
 //! especially if optimizations are turned on. 
 
 #![cfg_attr(feature = "try_trait", feature(try_trait))]
+#![cfg_attr(feature = "existential_type", feature(existential_type))]
 
 extern crate stackbt_automata_impl;
 extern crate num_traits;
@@ -38,6 +39,7 @@ pub mod behavior_tree_node;
 /// An automaton wrapper for behavior tree nodes. 
 pub mod node_runner;
 /// A serial running node controller. 
+#[macro_use]
 pub mod serial_node;
 /// A parallel running node controller. 
 pub mod parallel_node;

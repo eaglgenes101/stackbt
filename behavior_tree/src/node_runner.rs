@@ -5,33 +5,31 @@ use stackbt_automata_impl::automaton::{Automaton, FiniteStateAutomaton};
 /// input to it and transitions back from it, automatically restarting the
 /// node if it terminates. 
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct NodeRunner<N> where 
-    N: BehaviorTreeNode + 'static
+pub struct NodeRunner<N, C> where 
+    N: BehaviorTreeNode + 'static,
+    C: Fn() -> N
 {
+    constructor: C,
     node: Option<N>
 }
 
-impl<N> NodeRunner<N> where 
-    N: BehaviorTreeNode + 'static
+impl<N, C> NodeRunner<N, C> where 
+    N: BehaviorTreeNode + 'static,
+    C: Fn() -> N
 {
     /// Create a new node runner from a behavior tree node. 
-    pub fn new(node: N) -> NodeRunner<N> {
+    pub fn new(constructor: C) -> NodeRunner<N, C> {
+        let new_node = constructor();
         NodeRunner {
-            node: Option::Some(node)
+            constructor: constructor, 
+            node: Option::Some(new_node)
         }
     }
 }
 
-impl<N> Default for NodeRunner<N> where 
-    N: BehaviorTreeNode + Default + 'static
-{
-    fn default() -> NodeRunner<N> {
-        NodeRunner::new(N::default())
-    }
-}
-
-impl<N> Automaton<'static> for NodeRunner<N> where 
-    N: BehaviorTreeNode + Default + 'static
+impl<N, C> Automaton<'static> for NodeRunner<N, C> where 
+    N: BehaviorTreeNode + 'static,
+    C: Fn() -> N
 {
     type Input = N::Input;
     type Action = Statepoint<N::Nonterminal, N::Terminal>;
@@ -47,45 +45,35 @@ impl<N> Automaton<'static> for NodeRunner<N> where
                 Statepoint::Nonterminal(s)
             },
             NodeResult::Terminal(t) => {
-                self.node = Option::Some(N::default());
+                self.node = Option::Some((self.constructor)());
                 Statepoint::Terminal(t)
             }
         }
     }
 }
 
-impl<N> FiniteStateAutomaton<'static> for NodeRunner<N> where 
-    N: BehaviorTreeNode + Default + Copy + 'static
+impl<N, C> FiniteStateAutomaton<'static> for NodeRunner<N, C> where 
+    N: BehaviorTreeNode + 'static + Copy,
+    C: Fn() -> N + Copy
 {}
 
 #[cfg(test)]
 mod tests {
-    use base_nodes::WaitCondition;
     use behavior_tree_node::Statepoint;
-
-    #[derive(Default)]
-    struct ThingPred;
-
-    impl WaitCondition for ThingPred {
-        type Input = i64;
-        type Nonterminal = ();
-        type Terminal = ();
-        fn do_end(&self, i: &i64) -> Statepoint<(), ()> {
-            if *i == 0 {
-                Statepoint::Terminal(())
-            } else {
-                Statepoint::Nonterminal(())
-            }
-        }
-    }
 
     #[test]
     fn runner_test() {
         use stackbt_automata_impl::automaton::Automaton;
         use base_nodes::PredicateWait;
         use node_runner::NodeRunner;
-        let node = PredicateWait::new(ThingPred);
-        let mut machine = NodeRunner::new(node);
+        let constructor = | | PredicateWait::new(|i: &i64| {
+            if *i == 0 {
+                Statepoint::Terminal(())
+            } else {
+                Statepoint::Nonterminal(())
+            }
+        });
+        let mut machine = NodeRunner::new(constructor);
         match machine.transition(&1) {
             Statepoint::Nonterminal(_) => (),
             _ => unreachable!("Expected nonterminal state")

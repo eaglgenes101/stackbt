@@ -293,7 +293,7 @@ impl<I, N, T> ParallelDecider for ParallelRacer<I, N, T> where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "existential_type"))]
 mod tests {
     use base_nodes::MachineWrapper;
     use behavior_tree_node::{BehaviorTreeNode, NodeResult, Statepoint};
@@ -303,8 +303,8 @@ mod tests {
     use stackbt_automata_impl::ref_state_machine::{ReferenceTransition,
         RefStateMachine};
     use serial_node::EnumNode;
-    use map_wrappers::{OutputNodeMap, OutputMappedNode};
-    use control_wrappers::{NodeGuard, GuardedNode};
+    use map_wrappers::{OutputMappedNode};
+    use control_wrappers::{GuardedNode};
     use node_runner::NodeRunner;
     use std::marker::PhantomData;
     use num_derive::{FromPrimitive, ToPrimitive};
@@ -329,7 +329,7 @@ mod tests {
 
 
     #[derive(Copy, Clone, PartialEq, Eq, Debug, FromPrimitive, ToPrimitive)]
-    enum IndexEnum {
+    enum SomethingEnum {
         First,
         Second
     }
@@ -372,23 +372,23 @@ mod tests {
     
     impl EnumNode for MultiMachine {
 
-        type Discriminant = IndexEnum;
+        type Discriminant = SomethingEnum;
 
-        fn new(thing: IndexEnum) -> MultiMachine {
+        fn new(thing: SomethingEnum) -> MultiMachine {
             match thing {
-                IndexEnum::First => MultiMachine::First(
+                SomethingEnum::First => MultiMachine::First(
                     MachineWrapper::default()
                 ),
-                IndexEnum::Second => MultiMachine::Second(
+                SomethingEnum::Second => MultiMachine::Second(
                     MachineWrapper::default()
                 )
             }
         }
 
-        fn discriminant_of(&self) -> IndexEnum {
+        fn discriminant_of(&self) -> SomethingEnum {
             match self {
-                MultiMachine::First(_) => IndexEnum::First,
-                MultiMachine::Second(_) => IndexEnum::Second
+                MultiMachine::First(_) => SomethingEnum::First,
+                MultiMachine::Second(_) => SomethingEnum::Second
             }
         }
     }
@@ -398,15 +398,15 @@ mod tests {
         use serial_node::{SerialBranchNode, NontermReturn};
         use node_compositions::SerialRunner;
         let test_node = SerialBranchNode::<MultiMachine, _>::new(
-            SerialRunner::new(), IndexEnum::First
+            SerialRunner::new(), SomethingEnum::First
         );
         let test_node_1 = match test_node.step(&3) {
             NodeResult::Nonterminal(ret, n) => {
                 match ret {
                     NontermReturn::Nonterminal(e, v) => {
-                        let _: IndexEnum = e;
+                        let _: SomethingEnum = e;
                         let _: i64 = v;
-                        assert_eq!(e, IndexEnum::First);
+                        assert_eq!(e, SomethingEnum::First);
                         assert_eq!(v, 1);
                     },
                     _ => unreachable!("Expected subordinate nonterminal transition")
@@ -419,9 +419,9 @@ mod tests {
             NodeResult::Nonterminal(ret, n) => {
                 match ret {
                     NontermReturn::Nonterminal(e, v) => {
-                        let _: IndexEnum = e;
+                        let _: SomethingEnum = e;
                         let _: i64 = v;
-                        assert_eq!(e, IndexEnum::First);
+                        assert_eq!(e, SomethingEnum::First);
                         assert_eq!(v, 2);
                     },
                     _ => unreachable!("Expected subordinate nonterminal transition")
@@ -434,9 +434,9 @@ mod tests {
             NodeResult::Nonterminal(ret, n) => {
                 match ret {
                     NontermReturn::Terminal(e, v) => {
-                        let _: IndexEnum = e;
+                        let _: SomethingEnum = e;
                         let _: i64 = v;
-                        assert_eq!(e, IndexEnum::First);
+                        assert_eq!(e, SomethingEnum::First);
                         assert_eq!(v, 2);
                     },
                     _ => unreachable!("Expected subordinate nonterminal transition")
@@ -449,9 +449,9 @@ mod tests {
             NodeResult::Nonterminal(ret, n) => {
                 match ret {
                     NontermReturn::Nonterminal(e, v) => {
-                        let _: IndexEnum = e;
+                        let _: SomethingEnum = e;
                         let _: i64 = v;
-                        assert_eq!(e, IndexEnum::Second);
+                        assert_eq!(e, SomethingEnum::Second);
                         assert_eq!(v, 1);
                     },
                     _ => unreachable!("Expected subordinate nonterminal transition")
@@ -466,88 +466,34 @@ mod tests {
         };
     }
 
-    struct ValSep;
-
-    impl OutputNodeMap for ValSep {
-        type NontermIn = i64;
-        type NontermOut = i64;
-        type TermIn = i64;
-        type TermOut = Option<i64>;
-
-        fn nonterminal_transform(&self, inval: i64) -> i64 {
-            inval
-        }
-
-        fn terminal_transform(&self, inval: i64) -> Option<i64> {
-            if inval >= 2 {
-                Option::Some(inval)
-            } else {
-                Option::None
-            }
-        }
-    }
-
-    enum WrappedMachine {
-        First(OutputMappedNode<MachineWrapper<InternalStateMachine<'static, 
-            IndefiniteIncrement>, i64, i64>, ValSep>),
-        Second(OutputMappedNode<MachineWrapper<InternalStateMachine<'static, 
-            IndefiniteIncrement>, i64, i64>, ValSep>)
-    }
-
-    impl BehaviorTreeNode for WrappedMachine {
+    enum_node! {
         type Input = i64;
         type Nonterminal = i64;
         type Terminal = Option<i64>;
 
-        fn step(self, input: &i64) -> NodeResult<i64, Option<i64>, Self> {
-            match self {
-                WrappedMachine::First(n) => {
-                    match n.step(input) {
-                        NodeResult::Nonterminal(r, m) => NodeResult::Nonterminal(
-                            r,
-                            WrappedMachine::First(m)
-                        ),
-                        NodeResult::Terminal(t) => NodeResult::Terminal(t)
-                    }
+        enum WrappedMachine: IndexEnum {
+            First (OutputMappedNode::new(
+                |inval: i64| inval,
+                |inval: i64| if inval >= 2 {
+                    Option::Some(inval)
+                } else {
+                    Option::None
                 },
-                WrappedMachine::Second(n) => {
-                    match n.step(input) {
-                        NodeResult::Nonterminal(r, m) => NodeResult::Nonterminal(
-                            r,
-                            WrappedMachine::Second(m)
-                        ),
-                        NodeResult::Terminal(t) => NodeResult::Terminal(t)
-                    }
-                }
-            }
-        }
-    }
-    
-    impl EnumNode for WrappedMachine {
-        type Discriminant = IndexEnum;
-
-        fn new(thing: IndexEnum) -> WrappedMachine {
-            match thing {
-                IndexEnum::First => WrappedMachine::First(
-                    OutputMappedNode::new(
-                        ValSep, 
-                        MachineWrapper::default()
-                    )
-                ),
-                IndexEnum::Second => WrappedMachine::Second(
-                    OutputMappedNode::new(
-                        ValSep, 
-                        MachineWrapper::default()
-                    )
-                )
-            }
-        }
-
-        fn discriminant_of(&self) -> IndexEnum {
-            match self {
-                WrappedMachine::First(_) => IndexEnum::First,
-                WrappedMachine::Second(_) => IndexEnum::Second
-            }
+                MachineWrapper::new(InternalStateMachine::new(
+                    IndefiniteIncrement, 0
+                ))
+            )),
+            Second (OutputMappedNode::new(
+                |inval: i64| inval,
+                |inval: i64| if inval >= 2 {
+                    Option::Some(inval)
+                } else {
+                    Option::None
+                },
+                MachineWrapper::new(InternalStateMachine::new(
+                    IndefiniteIncrement, 0
+                ))
+            ))
         }
     }
 

@@ -16,12 +16,28 @@ pub trait InternalTransition {
 
 /// Type which exists to make utilizing closures with internal state machines
 /// that much more possible. 
+#[derive(PartialEq, Debug)]
 pub struct InternalTransClosure<I, N, A, C> where 
     C: Fn(&I, &mut N) -> A
 {
     closure: C,
     _junk: PhantomData<(I, N, A)>
 }
+
+impl<I, N, A, C> Clone for InternalTransClosure<I, N, A, C> where 
+    C: Fn(&I, &mut N) -> A + Clone
+{
+    fn clone(&self) -> Self {
+        InternalTransClosure {
+            closure: self.closure.clone(),
+            _junk: PhantomData
+        }
+    }
+}
+
+impl<I, N, A, C> Copy for InternalTransClosure<I, N, A, C> where 
+    C: Fn(&I, &mut N) -> A + Copy
+{}
 
 impl<I, N, A, C> InternalTransClosure<I, N, A, C> where 
     C: Fn(&I, &mut N) -> A

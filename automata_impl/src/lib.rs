@@ -8,7 +8,9 @@ pub mod ref_state_machine;
 pub mod internal_state_machine;
 /// The DualStateMachine finite state machine implementation. 
 pub mod dual_state_machine;
+/// Stateless automaton. 
+pub mod stateless_mapper;
 /// A pushdown automaton implementation based on finite state machines. 
 pub mod pushdown_automaton;
-/// Wrapper types for existing state machines. 
-pub mod map_wrappers;
+/// Combinators for automata. 
+pub mod automata_combinators;
